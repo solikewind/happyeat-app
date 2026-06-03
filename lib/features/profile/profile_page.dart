@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/config/api_env_config.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/providers/app_providers.dart';
+import '../../shared/widgets/api_env_switch.dart';
+
+class ProfilePage extends ConsumerStatefulWidget {
+  const ProfilePage({super.key});
+
+  @override
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends ConsumerState<ProfilePage> {
+  final _urlCtrl = TextEditingController();
+  bool? _healthOk;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _urlCtrl.text = ref.read(settingsProvider).apiBaseUrl;
+      _checkHealth();
+    });
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkHealth() async {
+    try {
+      final client = ref.read(apiClientProvider);
+      final ok = await client.checkHealth();
+      if (mounted) setState(() => _healthOk = ok);
+    } catch (_) {
+      if (mounted) setState(() => _healthOk = false);
+    }
+  }
+
+  Future<void> _saveUrl() async {
+    await ref.read(settingsProvider.notifier).persistBaseUrl(_urlCtrl.text);
+    ref.invalidate(apiClientProvider);
+    await _checkHealth();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('服务器地址已保存')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(authProvider);
+    final settings = ref.watch(settingsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('我的')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                child: const Icon(Icons.person, color: AppColors.primary),
+              ),
+              title: const Text('店员账号'),
+              subtitle: Text('角色：${auth.role ?? '—'}'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    '服务器设置',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  ApiEnvSwitch(
+                    urlController: _urlCtrl,
+                    onUrlSynced: () {
+                      ref.invalidate(apiClientProvider);
+                      _checkHealth();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _urlCtrl,
+                    decoration: InputDecoration(
+                      hintText: ApiEnvConfig.productionBaseUrl,
+                      suffixIcon: _healthOk == null
+                          ? null
+                          : Icon(
+                              _healthOk! ? Icons.check_circle : Icons.error,
+                              color: _healthOk!
+                                  ? AppColors.success
+                                  : AppColors.error,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '当前：${settings.apiBaseUrl}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: _checkHealth,
+                        child: const Text('检测连接'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _saveUrl,
+                        child: const Text('保存'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('关于'),
+                  subtitle: Text('HappyEat App v1.0.0'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: AppColors.error),
+                  title: const Text(
+                    '退出登录',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                  onTap: () => ref.read(authProvider.notifier).logout(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
