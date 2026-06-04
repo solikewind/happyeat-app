@@ -32,16 +32,18 @@ class _CartSheetState extends ConsumerState<CartSheet> {
     final orderType = ref.read(orderTypeProvider);
     final table = ref.read(currentTableProvider);
     if (orderType == 'dine_in' && table == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('堂食请先选择桌号')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('堂食请先选择桌号')));
       return;
     }
 
     setState(() => _submitting = true);
     try {
       final total = ref.read(cartProvider.notifier).totalYuan;
-      await ref.read(orderRepositoryProvider).createOrder(
+      await ref
+          .read(orderRepositoryProvider)
+          .createOrder(
             orderType: orderType,
             tableId: table?.id,
             items: cart,
@@ -51,16 +53,16 @@ class _CartSheetState extends ConsumerState<CartSheet> {
       ref.read(cartProvider.notifier).clear();
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('下单成功，可在订单页查看')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('下单成功，可在订单页查看')));
         context.go('/orders');
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -70,7 +72,7 @@ class _CartSheetState extends ConsumerState<CartSheet> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
-    final total = ref.watch(cartProvider.notifier).totalYuan;
+    final total = cart.fold<double>(0, (sum, item) => sum + item.lineTotal);
     final orderType = ref.watch(orderTypeProvider);
     final table = ref.watch(currentTableProvider);
 
@@ -189,8 +191,9 @@ class _CartSheetState extends ConsumerState<CartSheet> {
                         ),
                         const Spacer(),
                         FilledButton(
-                          onPressed:
-                              cart.isEmpty || _submitting ? null : _submit,
+                          onPressed: cart.isEmpty || _submitting
+                              ? null
+                              : _submit,
                           child: _submitting
                               ? const SizedBox(
                                   width: 20,

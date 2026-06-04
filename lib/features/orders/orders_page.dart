@@ -7,8 +7,11 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/utils/order_status_display.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/order_advance_button.dart';
 import '../../shared/widgets/order_status_chip.dart';
+import '../../shared/widgets/order_table_headline.dart';
 
 class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
@@ -19,8 +22,10 @@ class OrdersPage extends ConsumerStatefulWidget {
 
 class _OrdersPageState extends ConsumerState<OrdersPage> {
   List<OrderModel> _orders = [];
-  String? _statusFilter;
+  String? _statusFilter = 'created';
   bool _loading = true;
+  String? _updatingOrderId;
+  String? _printingOrderId;
   String? _error;
 
   @override
@@ -29,22 +34,71 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
-      final result = await ref.read(orderRepositoryProvider).listOrders(
-            status: _statusFilter,
-            pageSize: 50,
-          );
+      final result = await ref
+          .read(orderRepositoryProvider)
+          .listOrders(status: _statusFilter, pageSize: 50);
       if (mounted) setState(() => _orders = result.orders);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !silent) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _advanceStatus(OrderModel order) async {
+    final next = OrderStatusDisplay.workbenchAdvanceTarget(order.status);
+    if (next == null || _updatingOrderId != null) return;
+
+    setState(() => _updatingOrderId = order.id);
+    try {
+      await ref.read(orderRepositoryProvider).updateOrderStatus(order.id, next);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(OrderStatusDisplay.advanceSuccessMessage(next))),
+      );
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _updatingOrderId = null);
+    }
+  }
+
+  Future<void> _printKitchen(OrderModel order) async {
+    if (_printingOrderId != null) return;
+    setState(() => _printingOrderId = order.id);
+    try {
+      await ref.read(orderRepositoryProvider).printOrderKitchen(order.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已提交厨房打印')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _printingOrderId = null);
+    }
+  }
+
+  bool _canPrintKitchen(OrderModel order) {
+    final s = order.status.trim().toLowerCase();
+    return s != 'cancelled';
   }
 
   @override
@@ -98,6 +152,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                     _load();
                   },
                 ),
+                _FilterChip(
+                  label: '已取消',
+                  selected: _statusFilter == 'cancelled',
+                  onTap: () {
+                    setState(() => _statusFilter = 'cancelled');
+                    _load();
+                  },
+                ),
               ],
             ),
           ),
@@ -107,41 +169,52 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          children: [
-                            SizedBox(
-                              height: MediaQuery.of(context).size.height * 0.45,
-                              child: LoadErrorPanel(
-                                message: _error!,
-                                onRetry: _load,
-                              ),
-                            ),
-                          ],
-                        )
-                      : _orders.isEmpty
-                          ? ListView(
-                              children: const [
-                                SizedBox(
-                                  height: 200,
-                                  child: Center(child: Text('暂无订单')),
-                                ),
-                              ],
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: _orders.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final order = _orders[index];
-                                return _OrderCard(
-                                  order: order,
-                                  onTap: () =>
-                                      context.push('/orders/${order.id}'),
-                                );
-                              },
-                            ),
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.45,
+                          child: LoadErrorPanel(
+                            message: _error!,
+                            onRetry: _load,
+                          ),
+                        ),
+                      ],
+                    )
+                  : _orders.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(
+                          height: 200,
+                          child: Center(child: Text('暂无订单')),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _orders.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final order = _orders[index];
+                        return _OrderCard(
+                          order: order,
+                          advancing: _updatingOrderId == order.id,
+                          printing: _printingOrderId == order.id,
+                          onPrint: _canPrintKitchen(order)
+                              ? () => _printKitchen(order)
+                              : null,
+                          onAdvance:
+                              OrderStatusDisplay.workbenchAdvanceTarget(
+                                    order.status,
+                                  ) !=
+                                  null
+                              ? () => _advanceStatus(order)
+                              : null,
+                          onTap: () => context.push('/orders/${order.id}'),
+                        );
+                      },
+                    ),
             ),
           ),
         ],
@@ -177,64 +250,133 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
+  const _OrderCard({
+    required this.order,
+    required this.onTap,
+    this.onAdvance,
+    this.onPrint,
+    this.advancing = false,
+    this.printing = false,
+  });
 
   final OrderModel order;
   final VoidCallback onTap;
+  final VoidCallback? onAdvance;
+  final VoidCallback? onPrint;
+  final bool advancing;
+  final bool printing;
 
   @override
   Widget build(BuildContext context) {
-    final summary = order.items
-        .take(3)
+    final itemCount = order.items.fold<int>(0, (sum, e) => sum + e.quantity);
+    final summaryItems = order.items
+        .take(2)
         .map((e) => '${e.menuName}×${e.quantity}')
         .join('、');
+    final summary = order.items.length > 2
+        ? '$summaryItems 等$itemCount件'
+        : summaryItems;
 
     return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      order.orderNo.isNotEmpty
-                          ? order.orderNo
-                          : '#${order.id}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: OrderTableHeadline(order: order, compact: true),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        Money.formatYuan(order.totalAmount),
+                        style: const TextStyle(
+                          color: AppColors.error,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
                   ),
-                  OrderStatusChip(status: order.status),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      OrderStatusChip(status: order.status),
+                      if (order.createdAtLabel != null)
+                        Text(
+                          order.createdAtLabel!,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (summary.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                [
-                  order.orderType == 'dine_in' ? '堂食' : '外带',
-                  if (order.tableCode != null) '桌 ${order.tableCode}',
-                  Money.formatYuan(order.totalAmount),
-                  if (order.createdAtLabel != null) order.createdAtLabel!,
-                ].join(' · '),
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
+            ),
+            if (onPrint != null || onAdvance != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (onPrint != null)
+                    OutlinedButton.icon(
+                      onPressed: printing ? null : onPrint,
+                      icon: printing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.print_outlined, size: 16),
+                      label: const Text('打印'),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                      ),
+                    ),
+                  if (onPrint != null && onAdvance != null)
+                    const SizedBox(width: 8),
+                  if (onAdvance != null)
+                    OrderAdvanceButton(
+                      status: order.status,
+                      compact: true,
+                      loading: advancing,
+                      onPressed: onAdvance,
+                    ),
+                ],
               ),
-              if (summary.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  summary,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ],
             ],
-          ),
+          ],
         ),
       ),
     );

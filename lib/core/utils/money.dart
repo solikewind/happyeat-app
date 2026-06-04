@@ -1,19 +1,12 @@
-/// 金额工具：后端 price / price_delta / total_amount 均为「分」，界面按「元」展示。
+/// 金额工具：接口 price / price_delta / total_amount 均按「元」传递。
 class Money {
   Money._();
 
-  /// 接口金额（分）→ 元
-  static double apiCentsToYuan(num cents) => cents / 100;
+  /// 接口金额 → 元
+  static double apiAmountToYuan(num amount) => amount.toDouble();
 
-  /// 分 → 元字符串（如 2800 → "28.00"）
-  static String centsToYuan(int cents) {
-    return (cents / 100).toStringAsFixed(2);
-  }
-
-  /// 元 → 分（下单用）
-  static int yuanToCents(double yuan) {
-    return (yuan * 100).round();
-  }
+  /// 元 → 接口金额（下单用）
+  static double yuanToApiAmount(double yuan) => yuan;
 
   /// 展示：¥28.00
   static String formatYuan(double yuan) => '¥${yuan.toStringAsFixed(2)}';

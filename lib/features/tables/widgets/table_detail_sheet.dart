@@ -96,10 +96,7 @@ class _TableDetailBody extends StatelessWidget {
         const SizedBox(height: 20),
         Text(
           activeOrders.isEmpty ? '当前无进行中订单' : '进行中订单（${activeOrders.length}）',
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         ),
         const SizedBox(height: 10),
         if (activeOrders.isEmpty)
@@ -113,10 +110,7 @@ class _TableDetailBody extends StatelessWidget {
             ),
             child: const Text(
               '桌台处于空闲或仅有已完成订单。\n如需开台点单，请到「点餐」页选择本桌。',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                height: 1.45,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, height: 1.45),
             ),
           )
         else

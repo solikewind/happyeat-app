@@ -22,9 +22,7 @@ class LoginResult {
       expire: (json['expire'] as num?)?.toInt() ?? 0,
       userCode: json['user_code'] as String?,
       role: json['role'] as String?,
-      roles: rolesRaw is List
-          ? rolesRaw.map((e) => '$e').toList()
-          : const [],
+      roles: rolesRaw is List ? rolesRaw.map((e) => '$e').toList() : const [],
     );
   }
 }
@@ -53,11 +51,7 @@ class MenuCategory {
 }
 
 class MenuSpec {
-  MenuSpec({
-    this.specType,
-    this.specValue,
-    this.priceDelta = 0,
-  });
+  MenuSpec({this.specType, this.specValue, this.priceDelta = 0});
 
   final String? specType;
   final String? specValue;
@@ -67,7 +61,7 @@ class MenuSpec {
     return MenuSpec(
       specType: json['spec_type'] as String?,
       specValue: json['spec_value'] as String?,
-      priceDelta: Money.apiCentsToYuan((json['price_delta'] as num?) ?? 0),
+      priceDelta: Money.apiAmountToYuan((json['price_delta'] as num?) ?? 0),
     );
   }
 
@@ -98,14 +92,14 @@ class MenuItem {
     return MenuItem(
       id: '${json['id']}',
       name: '${json['name'] ?? ''}',
-      priceYuan: Money.apiCentsToYuan((json['price'] as num?) ?? 0),
+      priceYuan: Money.apiAmountToYuan((json['price'] as num?) ?? 0),
       categoryId: '${json['category_id'] ?? ''}',
       description: json['description'] as String?,
       image: json['image'] as String?,
       specs: specsRaw is List
           ? specsRaw
-              .map((e) => MenuSpec.fromJson(e as Map<String, dynamic>))
-              .toList()
+                .map((e) => MenuSpec.fromJson(e as Map<String, dynamic>))
+                .toList()
           : [],
     );
   }
@@ -156,9 +150,9 @@ class OrderLineItem {
     return OrderLineItem(
       menuName: '${json['menu_name'] ?? ''}',
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      unitPrice: Money.apiCentsToYuan((json['unit_price'] as num?) ?? 0),
+      unitPrice: Money.apiAmountToYuan((json['unit_price'] as num?) ?? 0),
       specInfo: json['spec_info'] as String?,
-      amount: Money.apiCentsToYuan((json['amount'] as num?) ?? 0),
+      amount: Money.apiAmountToYuan((json['amount'] as num?) ?? 0),
     );
   }
 }
@@ -170,8 +164,10 @@ class OrderModel {
     required this.status,
     required this.orderType,
     required this.totalAmount,
+    this.actualAmount,
     this.tableId,
     this.tableCode,
+    this.tableCategory,
     this.remark,
     this.items = const [],
     this.createdAt,
@@ -182,11 +178,24 @@ class OrderModel {
   final String status;
   final String orderType;
   final double totalAmount;
+  final double? actualAmount;
   final String? tableId;
   final String? tableCode;
+  final String? tableCategory;
   final String? remark;
   final List<OrderLineItem> items;
   final String? createdAt;
+
+  /// 堂食展示：大厅-1；外带：外带
+  String get locationLabel {
+    if (orderType != 'dine_in') return '外带';
+    final code = tableCode?.trim() ?? '';
+    final cat = tableCategory?.trim() ?? '';
+    if (cat.isNotEmpty && code.isNotEmpty) return '$cat-$code';
+    if (code.isNotEmpty) return code;
+    if (cat.isNotEmpty) return cat;
+    return '堂食';
+  }
 
   /// 列表/详情展示用，如 6/3 18:42
   String? get createdAtLabel {
@@ -209,14 +218,18 @@ class OrderModel {
       orderNo: '${json['order_no'] ?? ''}',
       status: '${json['status'] ?? ''}'.toLowerCase(),
       orderType: '${json['order_type'] ?? ''}',
-      totalAmount: Money.apiCentsToYuan((json['total_amount'] as num?) ?? 0),
+      totalAmount: Money.apiAmountToYuan((json['total_amount'] as num?) ?? 0),
+      actualAmount: json['actual_amount'] == null
+          ? null
+          : Money.apiAmountToYuan(json['actual_amount'] as num),
       tableId: json['table_id'] != null ? '${json['table_id']}' : null,
       tableCode: json['table_code'] as String?,
+      tableCategory: json['table_category'] as String?,
       remark: json['remark'] as String?,
       items: itemsRaw is List
           ? itemsRaw
-              .map((e) => OrderLineItem.fromJson(e as Map<String, dynamic>))
-              .toList()
+                .map((e) => OrderLineItem.fromJson(e as Map<String, dynamic>))
+                .toList()
           : [],
       createdAt: json['created_at'] as String?,
     );

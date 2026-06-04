@@ -6,6 +6,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/utils/table_display.dart';
 import '../../shared/widgets/cart_bottom_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
 import 'widgets/cart_sheet.dart';
@@ -24,6 +25,8 @@ class OrderingPage extends ConsumerStatefulWidget {
 }
 
 class _OrderingPageState extends ConsumerState<OrderingPage> {
+  static const double _snackBarBottomOffset = 104;
+
   List<MenuCategory> _categories = [];
   List<MenuItem> _allMenus = [];
   String _activeCategory = 'all';
@@ -39,15 +42,35 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   }
 
   void _openTablePicker() {
-    showTablePickerSheet(context, ref).then((picked) {
+    showTablePickerSheet(context, ref).then((picked) async {
       if (!mounted || picked == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      final catMap = await ref.read(tableCategoryMapProvider.future);
+      if (!mounted) return;
+      final label = TableDisplay.tableLabel(picked, catMap);
+      _showSnackBar('已选 $label', duration: const Duration(seconds: 1));
+    });
+  }
+
+  void _showSnackBar(
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
         SnackBar(
-          content: Text('已选桌 ${picked.code}'),
-          duration: const Duration(seconds: 1),
+          content: Text(message),
+          duration: duration,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            _snackBarBottomOffset + bottomPadding,
+          ),
         ),
       );
-    });
   }
 
   void _maybePromptTable() {
@@ -96,15 +119,15 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   List<MenuItem> get _filteredMenus {
     final q = _search.trim().toLowerCase();
     if (q.isEmpty) return _categoryMenus;
-    return _categoryMenus.where((m) => m.name.toLowerCase().contains(q)).toList();
+    return _categoryMenus
+        .where((m) => m.name.toLowerCase().contains(q))
+        .toList();
   }
 
   bool _ensureDineInTable() {
     if (ref.read(orderTypeProvider) != 'dine_in') return true;
     if (ref.read(currentTableProvider) != null) return true;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('堂食请先选择餐桌')),
-    );
+    _showSnackBar('堂食请先选择餐桌');
     _openTablePicker();
     return false;
   }
@@ -133,7 +156,9 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         ? null
         : specs.map((s) => '${s.specType}:${s.specValue}').join(' ');
 
-    ref.read(cartProvider.notifier).add(
+    ref
+        .read(cartProvider.notifier)
+        .add(
           CartItem(
             menuId: menu.id,
             name: menu.name,
@@ -143,11 +168,9 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
             image: menu.image,
           ),
         );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已添加 ${menu.name} ×$qty'),
-        duration: const Duration(seconds: 1),
-      ),
+    _showSnackBar(
+      '已添加 ${menu.name} ×$qty',
+      duration: const Duration(seconds: 1),
     );
   }
 
@@ -172,7 +195,11 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 80),
-          Icon(Icons.restaurant_outlined, size: 48, color: Colors.grey.shade400),
+          Icon(
+            Icons.restaurant_outlined,
+            size: 48,
+            color: Colors.grey.shade400,
+          ),
           const SizedBox(height: 12),
           const Center(
             child: Text(
@@ -190,18 +217,16 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final menu = _filteredMenus[index];
-        return MenuListTile(
-          menu: menu,
-          onAdd: () => _openSpecPicker(menu),
-        );
+        return MenuListTile(menu: menu, onAdd: () => _openSpecPicker(menu));
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cartCount = ref.watch(cartProvider.notifier).itemCount;
-    final cartTotal = ref.watch(cartProvider.notifier).totalYuan;
+    final cart = ref.watch(cartProvider);
+    final cartCount = cart.fold<int>(0, (sum, item) => sum + item.quantity);
+    final cartTotal = cart.fold<double>(0, (sum, item) => sum + item.lineTotal);
 
     return Scaffold(
       backgroundColor: AppColors.background,

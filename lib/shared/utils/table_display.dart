@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/models/models.dart';
+import '../../data/models/table_category.dart';
 
 /// 桌台状态（与后端 tablebase.api / ent schema 一致）
-enum TableStatusKind {
-  idle,
-  using,
-  reserved,
-  cleaning,
-  unknown,
-}
+enum TableStatusKind { idle, using, reserved, cleaning, unknown }
 
 class TableDisplay {
   TableDisplay._();
@@ -78,5 +74,42 @@ class TableDisplay {
       case TableStatusKind.unknown:
         return Icons.help_outline;
     }
+  }
+
+  static Map<String, String> categoryNameById(
+    List<TableCategoryItem> categories,
+  ) {
+    return {for (final c in categories) c.id: c.name};
+  }
+
+  /// 展示：大厅-1（与订单 locationLabel 一致）
+  static String tableLabel(
+    TableItem table,
+    Map<String, String> categoryNameById,
+  ) {
+    final cat = categoryNameById[table.categoryId]?.trim() ?? '';
+    final code = table.code.trim();
+    if (cat.isNotEmpty && code.isNotEmpty) return '$cat-$code';
+    if (code.isNotEmpty) return code;
+    if (cat.isNotEmpty) return cat;
+    return '未命名';
+  }
+
+  static Map<String, List<TableItem>> groupTables(
+    List<TableItem> tables,
+    Map<String, String> categoryNameById,
+  ) {
+    final map = <String, List<TableItem>>{};
+    for (final t in tables) {
+      final name = categoryNameById[t.categoryId]?.trim();
+      final key = (name != null && name.isNotEmpty) ? name : '未分类';
+      map.putIfAbsent(key, () => []).add(t);
+    }
+    for (final list in map.values) {
+      list.sort((a, b) => a.code.compareTo(b.code));
+    }
+    return Map.fromEntries(
+      map.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
   }
 }

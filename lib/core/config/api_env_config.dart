@@ -18,7 +18,7 @@ class ApiEnvConfig {
   /// `flutter build apk --dart-define=PROD_API_URL=https://api.example.com`
   static const String productionBaseUrl = String.fromEnvironment(
     'PROD_API_URL',
-    defaultValue: 'http://YOUR_SERVER_HOST:8888',
+    defaultValue: 'http://43.138.118.104:8888',
   );
 
   /// 真机调试本机后端时，填电脑局域网 IP（留空则用模拟器默认，见 [localBaseUrl]）。

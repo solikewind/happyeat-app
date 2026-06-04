@@ -12,10 +12,7 @@ class OrderRepository {
     int pageSize = 20,
     String? status,
   }) async {
-    final query = <String, dynamic>{
-      'current': current,
-      'pageSize': pageSize,
-    };
+    final query = <String, dynamic>{'current': current, 'pageSize': pageSize};
     if (status != null && status.isNotEmpty) {
       query['status'] = status.toUpperCase();
     }
@@ -23,8 +20,8 @@ class OrderRepository {
     final list = data['orders'];
     final orders = list is List
         ? list
-            .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
-            .toList()
+              .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+              .toList()
         : <OrderModel>[];
     return (orders: orders, total: (data['total'] as num?)?.toInt() ?? 0);
   }
@@ -56,13 +53,13 @@ class OrderRepository {
               (i) => {
                 'menu_name': i.name,
                 'quantity': i.quantity,
-                'unit_price': Money.yuanToCents(i.unitPrice),
+                'unit_price': Money.yuanToApiAmount(i.unitPrice),
                 if (i.specInfo != null) 'spec_info': i.specInfo,
               },
             )
             .toList(),
-        'total_amount': Money.yuanToCents(totalYuan),
-        'actual_amount': Money.yuanToCents(actualYuan ?? totalYuan),
+        'total_amount': Money.yuanToApiAmount(totalYuan),
+        'actual_amount': Money.yuanToApiAmount(actualYuan ?? totalYuan),
         if (remark != null && remark.isNotEmpty) 'remark': remark,
       },
     );
@@ -71,5 +68,19 @@ class OrderRepository {
       return OrderModel.fromJson(order);
     }
     throw Exception('下单失败');
+  }
+
+  /// 厨房小票打印（商鹏，与 Web 工作台「打印」一致）
+  Future<void> printOrderKitchen(String id) async {
+    await _client.post('/order/$id/print');
+  }
+
+  /// 更新订单状态（status 小写即可，会转为后端枚举大写）
+  Future<void> updateOrderStatus(String id, String status) async {
+    final normalized = status.trim().toLowerCase();
+    await _client.put(
+      '/order/$id/status',
+      data: {'status': normalized.toUpperCase()},
+    );
   }
 }

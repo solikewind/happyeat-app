@@ -13,7 +13,7 @@ import '../../shared/utils/order_status_display.dart';
 import '../../shared/utils/table_display.dart';
 import '../../shared/widgets/load_error_panel.dart';
 import 'widgets/table_detail_sheet.dart';
-import 'widgets/table_floor_tile.dart';
+import '../../shared/widgets/table_compact_tile.dart';
 
 /// 厅面看板：展示桌台状态与进行中订单（不负责选桌，选桌在点餐页）
 class TablesPage extends ConsumerStatefulWidget {
@@ -67,10 +67,12 @@ class _TablesPageState extends ConsumerState<TablesPage> {
       final categories = results[1] as List<TableCategoryItem>;
       final orderRes = results[2] as ({List<OrderModel> orders, int total});
       final active = orderRes.orders
-          .where((o) =>
-              o.tableId != null &&
-              o.tableId!.isNotEmpty &&
-              OrderStatusDisplay.isActive(o.status))
+          .where(
+            (o) =>
+                o.tableId != null &&
+                o.tableId!.isNotEmpty &&
+                OrderStatusDisplay.isActive(o.status),
+          )
           .toList();
 
       setState(() {
@@ -86,9 +88,8 @@ class _TablesPageState extends ConsumerState<TablesPage> {
     }
   }
 
-  Map<String, String> get _categoryNameById {
-    return {for (final c in _categories) c.id: c.name};
-  }
+  Map<String, String> get _categoryNameById =>
+      TableDisplay.categoryNameById(_categories);
 
   List<TableItem> get _filteredTables {
     if (_statusFilter == null || _statusFilter!.isEmpty) return _tables;
@@ -97,20 +98,8 @@ class _TablesPageState extends ConsumerState<TablesPage> {
         .toList();
   }
 
-  Map<String, List<TableItem>> get _groupedTables {
-    final map = <String, List<TableItem>>{};
-    for (final t in _filteredTables) {
-      final name = _categoryNameById[t.categoryId];
-      final key = (name != null && name.isNotEmpty) ? name : '未分类';
-      map.putIfAbsent(key, () => []).add(t);
-    }
-    for (final list in map.values) {
-      list.sort((a, b) => a.code.compareTo(b.code));
-    }
-    return Map.fromEntries(
-      map.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
-    );
-  }
+  Map<String, List<TableItem>> get _groupedTables =>
+      TableDisplay.groupTables(_filteredTables, _categoryNameById);
 
   int _countByKind(TableStatusKind kind) {
     return _tables.where((t) => TableDisplay.kindOf(t.status) == kind).length;
@@ -144,10 +133,17 @@ class _TablesPageState extends ConsumerState<TablesPage> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('厅面看板', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(
+              '厅面看板',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             Text(
               '查看桌态与进行中订单',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -162,117 +158,105 @@ class _TablesPageState extends ConsumerState<TablesPage> {
       body: _loading && _tables.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _error != null && _tables.isEmpty
-              ? LoadErrorPanel(message: _error!, onRetry: () => _load())
-              : RefreshIndicator(
-                  onRefresh: () => _load(),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    children: [
-                      _SummaryStrip(
-                        idle: idle,
-                        using: using,
-                        reserved: reserved,
-                        cleaning: cleaning,
-                        total: _tables.length,
-                      ),
-                      const SizedBox(height: 12),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _StatusFilterChip(
-                              label: '全部',
-                              selected: _statusFilter == null,
-                              onTap: () => setState(() => _statusFilter = null),
-                            ),
-                            _StatusFilterChip(
-                              label: '空闲 $idle',
-                              color: TableDisplay.statusColor('idle'),
-                              selected: _statusFilter == 'idle',
-                              onTap: () => setState(() => _statusFilter = 'idle'),
-                            ),
-                            _StatusFilterChip(
-                              label: '使用中 $using',
-                              color: TableDisplay.statusColor('using'),
-                              selected: _statusFilter == 'using',
-                              onTap: () => setState(() => _statusFilter = 'using'),
-                            ),
-                            _StatusFilterChip(
-                              label: '预留 $reserved',
-                              color: TableDisplay.statusColor('reserved'),
-                              selected: _statusFilter == 'reserved',
-                              onTap: () => setState(() => _statusFilter = 'reserved'),
-                            ),
-                            _StatusFilterChip(
-                              label: '清洁 $cleaning',
-                              color: TableDisplay.statusColor('cleaning'),
-                              selected: _statusFilter == 'cleaning',
-                              onTap: () => setState(() => _statusFilter = 'cleaning'),
-                            ),
-                          ],
+          ? LoadErrorPanel(message: _error!, onRetry: () => _load())
+          : RefreshIndicator(
+              onRefresh: () => _load(),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                children: [
+                  _SummaryStrip(
+                    idle: idle,
+                    using: using,
+                    reserved: reserved,
+                    cleaning: cleaning,
+                    total: _tables.length,
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _StatusFilterChip(
+                          label: '全部',
+                          selected: _statusFilter == null,
+                          onTap: () => setState(() => _statusFilter = null),
+                        ),
+                        _StatusFilterChip(
+                          label: '空闲 $idle',
+                          color: TableDisplay.statusColor('idle'),
+                          selected: _statusFilter == 'idle',
+                          onTap: () => setState(() => _statusFilter = 'idle'),
+                        ),
+                        _StatusFilterChip(
+                          label: '使用中 $using',
+                          color: TableDisplay.statusColor('using'),
+                          selected: _statusFilter == 'using',
+                          onTap: () => setState(() => _statusFilter = 'using'),
+                        ),
+                        _StatusFilterChip(
+                          label: '预留 $reserved',
+                          color: TableDisplay.statusColor('reserved'),
+                          selected: _statusFilter == 'reserved',
+                          onTap: () =>
+                              setState(() => _statusFilter = 'reserved'),
+                        ),
+                        _StatusFilterChip(
+                          label: '清洁 $cleaning',
+                          color: TableDisplay.statusColor('cleaning'),
+                          selected: _statusFilter == 'cleaning',
+                          onTap: () =>
+                              setState(() => _statusFilter = 'cleaning'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (groups.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Text(
+                          '没有符合筛选的餐桌',
+                          style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      if (groups.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(
+                    )
+                  else
+                    ...groups.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
                             child: Text(
-                              '没有符合筛选的餐桌',
-                              style: TextStyle(color: AppColors.textSecondary),
+                              entry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: AppStyles.textPrimary,
+                              ),
                             ),
                           ),
-                        )
-                      else
-                        ...groups.entries.map((entry) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: Text(
-                                  entry.key,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
-                                    color: AppStyles.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  mainAxisSpacing: 10,
-                                  crossAxisSpacing: 10,
-                                  childAspectRatio: 0.92,
-                                ),
-                                itemCount: entry.value.length,
-                                itemBuilder: (context, index) {
-                                  final table = entry.value[index];
-                                  final orders = _ordersForTable(table.id);
-                                  final strongest = orders.isEmpty
-                                      ? null
-                                      : OrderStatusDisplay.strongestActiveStatus(
-                                          orders.map((o) => o.status),
-                                        );
-                                  return TableFloorTile(
-                                    table: table,
-                                    activeOrderCount: orders.length,
-                                    activeOrderStatus: strongest,
-                                    onTap: () => _openTableDetail(table),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 20),
-                            ],
-                          );
-                        }),
-                    ],
-                  ),
-                ),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: tableCompactGridDelegate,
+                            itemCount: entry.value.length,
+                            itemBuilder: (context, index) {
+                              final table = entry.value[index];
+                              return TableCompactTile(
+                                table: table,
+                                onTap: () => _openTableDetail(table),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      );
+                    }),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -336,11 +320,11 @@ class _SummaryStrip extends StatelessWidget {
   }
 
   Widget _divider() => Container(
-        width: 1,
-        height: 36,
-        color: AppStyles.border,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-      );
+    width: 1,
+    height: 36,
+    color: AppStyles.border,
+    margin: const EdgeInsets.symmetric(horizontal: 6),
+  );
 }
 
 class _StatCell extends StatelessWidget {

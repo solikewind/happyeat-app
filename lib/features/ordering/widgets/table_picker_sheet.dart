@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../data/models/table_category.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/utils/table_display.dart';
 import '../../../shared/widgets/load_error_panel.dart';
+import '../../../shared/widgets/table_compact_tile.dart';
 
 /// 仅在点餐页弹出选桌（底部抽屉）；厅面 Tab 不做选桌
 Future<TableItem?> showTablePickerSheet(BuildContext context, WidgetRef ref) {
@@ -45,8 +46,15 @@ class TablePickerSheet extends ConsumerStatefulWidget {
 
 class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
   List<TableItem> _tables = [];
+  List<TableCategoryItem> _categories = [];
   bool _loading = true;
   String? _error;
+
+  Map<String, String> get _categoryNameById =>
+      TableDisplay.categoryNameById(_categories);
+
+  Map<String, List<TableItem>> get _groupedTables =>
+      TableDisplay.groupTables(_tables, _categoryNameById);
 
   @override
   void initState() {
@@ -60,8 +68,17 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
       _error = null;
     });
     try {
-      final list = await ref.read(tableRepositoryProvider).listTables();
-      if (mounted) setState(() => _tables = list);
+      final repo = ref.read(tableRepositoryProvider);
+      final results = await Future.wait([
+        repo.listTables(),
+        repo.listTableCategories(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _tables = results[0] as List<TableItem>;
+          _categories = results[1] as List<TableCategoryItem>;
+        });
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -78,6 +95,9 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final current = ref.watch(currentTableProvider);
+    final currentLabel = current != null
+        ? TableDisplay.tableLabel(current, _categoryNameById)
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,10 +108,10 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
             children: [
               const Text('选择餐桌', style: AppStyles.pageTitle),
               const Spacer(),
-              if (current != null)
+              if (currentLabel != null)
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('当前 ${current.code}'),
+                  child: Text('当前 $currentLabel'),
                 ),
             ],
           ),
@@ -100,108 +120,52 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? LoadErrorPanel(message: _error!, onRetry: _load)
-                  : _tables.isEmpty
-                      ? const Center(child: Text('暂无餐桌'))
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          child: GridView.builder(
-                            controller: widget.scrollController,
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              childAspectRatio: 0.95,
+              ? LoadErrorPanel(message: _error!, onRetry: _load)
+              : _tables.isEmpty
+              ? const Center(child: Text('暂无餐桌'))
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: CustomScrollView(
+                    controller: widget.scrollController,
+                    slivers: [
+                      for (final entry in _groupedTables.entries) ...[
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: AppStyles.textPrimary,
+                              ),
                             ),
-                            itemCount: _tables.length,
-                            itemBuilder: (context, index) {
-                              final table = _tables[index];
-                              return _TablePickTile(
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          sliver: SliverGrid(
+                            gridDelegate: tableCompactGridDelegate,
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final table = entry.value[index];
+                              return TableCompactTile(
                                 table: table,
                                 selected: current?.id == table.id,
                                 onTap: () => _pick(table),
                               );
-                            },
+                            }, childCount: entry.value.length),
                           ),
                         ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TablePickTile extends StatelessWidget {
-  const _TablePickTile({
-    required this.table,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final TableItem table;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusColor = TableDisplay.statusColor(table.status);
-
-    return Material(
-      color: selected ? AppColors.primaryLight : Colors.white,
-      borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-            border: Border.all(
-              color: selected ? AppColors.primary : AppStyles.border,
-              width: selected ? 2 : 1,
-            ),
-            boxShadow: selected ? AppStyles.cardShadow : null,
-          ),
-          padding: const EdgeInsets.all(6),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                table.code,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: selected ? AppColors.primary : null,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${table.capacity}人',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  TableDisplay.statusLabel(table.status),
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
+                      ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
         ),
-      ),
+      ],
     );
   }
 }

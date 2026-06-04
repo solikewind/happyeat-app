@@ -6,10 +6,21 @@ export 'api_providers.dart';
 export 'auth_provider.dart';
 export 'settings_provider.dart';
 
+import '../utils/table_display.dart';
+import 'api_providers.dart';
+
 /// 堂食 dine_in / 外带 takeaway
 final orderTypeProvider = StateProvider<String>((ref) => 'dine_in');
 
 final currentTableProvider = StateProvider<TableItem?>((ref) => null);
+
+/// 餐桌分类 id → 名称（选桌、点餐栏展示用）
+final tableCategoryMapProvider = FutureProvider<Map<String, String>>((
+  ref,
+) async {
+  final cats = await ref.read(tableRepositoryProvider).listTableCategories();
+  return TableDisplay.categoryNameById(cats);
+});
 
 final cartProvider = StateNotifierProvider<CartNotifier, List<CartItem>>((ref) {
   return CartNotifier();
