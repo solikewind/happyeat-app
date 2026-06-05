@@ -2,12 +2,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/models.dart';
 
+export 'add_to_order_provider.dart';
 export 'api_providers.dart';
 export 'auth_provider.dart';
 export 'settings_provider.dart';
 
 import '../utils/table_display.dart';
 import 'api_providers.dart';
+
+/// 底栏 Tab 索引，用于切换 Tab 时触发页面刷新
+abstract final class ShellTab {
+  static const ordering = 0;
+  static const orders = 1;
+  static const tables = 2;
+  static const profile = 3;
+}
+
+final shellTabIndexProvider = StateProvider<int>((ref) => ShellTab.ordering);
 
 /// 堂食 dine_in / 外带 takeaway
 final orderTypeProvider = StateProvider<String>((ref) => 'dine_in');

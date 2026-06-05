@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/api_env_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/api_env_switch.dart';
+import '../../shared/widgets/app_brand_avatar.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -65,12 +67,59 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         children: [
           Card(
             child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                child: const Icon(Icons.person, color: AppColors.primary),
-              ),
+              leading: const AppBrandAvatar(size: 48, borderRadius: 18),
               title: const Text('店员账号'),
               subtitle: Text('角色：${auth.role ?? '—'}'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.bar_chart_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  title: const Text(
+                    '经营统计',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text('每日销量、营业额与菜品明细'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/sales-stats'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.restaurant_menu,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  title: const Text(
+                    '菜单管理',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text('添加、修改菜品与封面'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/menu-manage'),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

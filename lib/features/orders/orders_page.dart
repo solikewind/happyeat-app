@@ -7,11 +7,16 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/utils/add_to_order_flow.dart';
 import '../../shared/utils/order_status_display.dart';
+import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/order_action_tile.dart';
 import '../../shared/widgets/order_advance_button.dart';
+import '../../shared/widgets/order_cancel_dialog.dart';
 import '../../shared/widgets/order_status_chip.dart';
 import '../../shared/widgets/order_table_headline.dart';
+import '../../shared/widgets/shell_tab_listener.dart';
 
 class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
@@ -26,6 +31,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   bool _loading = true;
   String? _updatingOrderId;
   String? _printingOrderId;
+  String? _cancellingOrderId;
   String? _error;
 
   @override
@@ -61,8 +67,9 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     try {
       await ref.read(orderRepositoryProvider).updateOrderStatus(order.id, next);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(OrderStatusDisplay.advanceSuccessMessage(next))),
+      showBriefSnackBar(
+        context,
+        OrderStatusDisplay.advanceSuccessMessage(next),
       );
       await _load(silent: true);
     } on ApiException catch (e) {
@@ -84,7 +91,10 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已提交厨房打印')));
+      ).showSnackBar(const SnackBar(
+        content: Text('已提交厨房打印'),
+        duration: Duration(milliseconds: 1200),
+      ));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -101,9 +111,40 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     return s != 'cancelled';
   }
 
+  Future<void> _removeOrder(OrderModel order) async {
+    if (_cancellingOrderId != null) return;
+    if (!OrderStatusDisplay.canRemove(order.status)) return;
+    final isDelete = OrderStatusDisplay.canDelete(order.status);
+    if (!await confirmRemoveOrder(context, isDelete: isDelete)) return;
+
+    setState(() => _cancellingOrderId = order.id);
+    try {
+      await ref.read(orderRepositoryProvider).cancelOrder(order.id);
+      if (!mounted) return;
+      showBriefSnackBar(
+        context,
+        isDelete
+            ? OrderStatusDisplay.deleteSuccessMessage
+            : OrderStatusDisplay.cancelSuccessMessage,
+      );
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _cancellingOrderId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ShellTabListener(
+      tabIndex: ShellTab.orders,
+      onReselect: () => _load(silent: true),
+      child: Scaffold(
       appBar: AppBar(title: const Text('订单')),
       body: Column(
         children: [
@@ -201,6 +242,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                           order: order,
                           advancing: _updatingOrderId == order.id,
                           printing: _printingOrderId == order.id,
+                          cancelling: _cancellingOrderId == order.id,
                           onPrint: _canPrintKitchen(order)
                               ? () => _printKitchen(order)
                               : null,
@@ -211,6 +253,16 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                                   null
                               ? () => _advanceStatus(order)
                               : null,
+                          onAddItems: OrderStatusDisplay.canAddItems(order.status)
+                              ? () => startAddToOrderFlow(
+                                  context,
+                                  ref,
+                                  order: order,
+                                )
+                              : null,
+                          onRemove: OrderStatusDisplay.canRemove(order.status)
+                              ? () => _removeOrder(order)
+                              : null,
                           onTap: () => context.push('/orders/${order.id}'),
                         );
                       },
@@ -219,6 +271,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -253,18 +306,24 @@ class _OrderCard extends StatelessWidget {
   const _OrderCard({
     required this.order,
     required this.onTap,
+    this.onAddItems,
     this.onAdvance,
     this.onPrint,
+    this.onRemove,
     this.advancing = false,
     this.printing = false,
+    this.cancelling = false,
   });
 
   final OrderModel order;
   final VoidCallback onTap;
+  final VoidCallback? onAddItems;
   final VoidCallback? onAdvance;
   final VoidCallback? onPrint;
+  final VoidCallback? onRemove;
   final bool advancing;
   final bool printing;
+  final bool cancelling;
 
   @override
   Widget build(BuildContext context) {
@@ -308,72 +367,72 @@ class _OrderCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      OrderStatusChip(status: order.status),
-                      if (order.createdAtLabel != null)
-                        Text(
-                          order.createdAtLabel!,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                OrderStatusChip(status: order.status),
+                                if (order.createdAtLabel != null)
+                                  Text(
+                                    order.createdAtLabel!,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (summary.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
                     ],
                   ),
-                  if (summary.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      summary,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-            if (onPrint != null || onAdvance != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (onPrint != null)
-                    OutlinedButton.icon(
-                      onPressed: printing ? null : onPrint,
-                      icon: printing
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.print_outlined, size: 16),
-                      label: const Text('打印'),
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                      ),
-                    ),
-                  if (onPrint != null && onAdvance != null)
-                    const SizedBox(width: 8),
-                  if (onAdvance != null)
-                    OrderAdvanceButton(
-                      status: order.status,
-                      compact: true,
-                      loading: advancing,
-                      onPressed: onAdvance,
-                    ),
-                ],
+            if (onPrint != null ||
+                onAdvance != null ||
+                onRemove != null ||
+                onAddItems != null) ...[
+              const SizedBox(height: 10),
+              if (onAdvance != null) ...[
+                OrderAdvanceButton(
+                  status: order.status,
+                  loading: advancing,
+                  onPressed: onAdvance,
+                ),
+                if (onPrint != null || onRemove != null || onAddItems != null)
+                  const SizedBox(height: 8),
+              ],
+              OrderCardSecondaryActions(
+                onAddItems: onAddItems,
+                onPrint: onPrint,
+                printing: printing,
+                onRemove: onRemove,
+                removing: cancelling,
+                removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
+                isDelete: OrderStatusDisplay.canDelete(order.status),
               ),
             ],
           ],

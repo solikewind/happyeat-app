@@ -43,21 +43,29 @@ class OrderAdvanceButton extends StatelessWidget {
       );
     }
 
+    final isPrepare =
+        OrderStatusDisplay.workbenchAdvanceLabel(status) == '开始制作';
+
     return SizedBox(
       width: double.infinity,
+      height: 48,
       child: FilledButton.icon(
         onPressed: loading ? null : onPressed,
         icon: loading
             ? const SizedBox.shrink()
             : Icon(
-                OrderStatusDisplay.workbenchAdvanceLabel(status) == '开始制作'
-                    ? Icons.play_circle_outline
-                    : Icons.check_circle_outline,
+                isPrepare
+                    ? Icons.play_circle_outline_rounded
+                    : Icons.check_circle_rounded,
               ),
         label: child,
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
     );

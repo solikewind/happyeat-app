@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_styles.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/utils/add_to_order_flow.dart';
 import '../../../shared/utils/order_status_display.dart';
 import '../../../shared/utils/table_display.dart';
 import '../../../shared/widgets/order_status_chip.dart';
@@ -35,7 +37,7 @@ void showTableDetailSheet(
   );
 }
 
-class _TableDetailBody extends StatelessWidget {
+class _TableDetailBody extends ConsumerWidget {
   const _TableDetailBody({
     required this.scrollController,
     required this.table,
@@ -49,7 +51,7 @@ class _TableDetailBody extends StatelessWidget {
   final List<OrderModel> activeOrders;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final statusColor = TableDisplay.statusColor(table.status);
 
     return ListView(
@@ -117,22 +119,46 @@ class _TableDetailBody extends StatelessWidget {
           ...activeOrders.map(
             (order) => Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push('/orders/${order.id}');
-                },
-                title: Text(
-                  order.orderNo.isNotEmpty ? order.orderNo : '#${order.id}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          context.push('/orders/${order.id}');
+                        },
+                        title: Text(
+                          order.orderNo.isNotEmpty
+                              ? order.orderNo
+                              : '#${order.id}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          [
+                            Money.formatYuan(order.totalAmount),
+                            if (order.createdAtLabel != null)
+                              order.createdAtLabel!,
+                          ].join(' · '),
+                        ),
+                        trailing: OrderStatusChip(status: order.status),
+                      ),
+                    ),
+                    if (OrderStatusDisplay.canAddItems(order.status))
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          startAddToOrderFlow(context, ref, order: order);
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('加菜'),
+                      ),
+                  ],
                 ),
-                subtitle: Text(
-                  [
-                    Money.formatYuan(order.totalAmount),
-                    if (order.createdAtLabel != null) order.createdAtLabel!,
-                  ].join(' · '),
-                ),
-                trailing: OrderStatusChip(status: order.status),
               ),
             ),
           ),

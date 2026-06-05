@@ -6,7 +6,11 @@ import '../../features/auth/login_page.dart';
 import '../../features/ordering/ordering_page.dart';
 import '../../features/orders/order_detail_page.dart';
 import '../../features/orders/orders_page.dart';
+import '../../features/profile/menu_edit_page.dart';
+import '../../features/profile/menu_manage_page.dart';
 import '../../features/profile/profile_page.dart';
+import '../../features/profile/sales_menu_detail_page.dart';
+import '../../features/profile/sales_stats_page.dart';
 import '../../features/shell/main_shell.dart';
 import '../../features/tables/tables_page.dart';
 import '../../shared/providers/app_providers.dart';
@@ -76,6 +80,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return OrderDetailPage(orderId: id);
+        },
+      ),
+      GoRoute(
+        path: '/sales-stats',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SalesStatsPage(),
+        routes: [
+          GoRoute(
+            path: 'menus',
+            builder: (context, state) => const SalesMenuDetailPage(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/menu-manage',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const MenuManagePage(),
+      ),
+      GoRoute(
+        path: '/menu-edit',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final menuId = state.extra as String?;
+          return MenuEditPage(menuId: menuId);
         },
       ),
     ],

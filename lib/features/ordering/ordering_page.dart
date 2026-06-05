@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_exception.dart';
-import '../../core/theme/app_styles.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/table_display.dart';
 import '../../shared/widgets/cart_bottom_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/menu_cover_image.dart';
+import '../../shared/widgets/shell_tab_listener.dart';
+import 'widgets/add_to_order_banner.dart';
 import 'widgets/cart_sheet.dart';
 import 'widgets/category_rail.dart';
 import 'widgets/menu_list_tile.dart';
@@ -33,6 +35,8 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   String _search = '';
   bool _loading = false;
   String? _error;
+  int _overlayCount = 0;
+  final _menuScrollController = ScrollController();
 
   @override
   void initState() {
@@ -41,8 +45,23 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptTable());
   }
 
+  @override
+  void dispose() {
+    _menuScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<T?> _withOverlay<T>(Future<T?> Function() show) async {
+    setState(() => _overlayCount++);
+    try {
+      return await show();
+    } finally {
+      if (mounted) setState(() => _overlayCount--);
+    }
+  }
+
   void _openTablePicker() {
-    showTablePickerSheet(context, ref).then((picked) async {
+    _withOverlay(() => showTablePickerSheet(context, ref)).then((picked) async {
       if (!mounted || picked == null) return;
       final catMap = await ref.read(tableCategoryMapProvider.future);
       if (!mounted) return;
@@ -81,11 +100,13 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     }
   }
 
-  Future<void> _refreshAll() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _refreshAll({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final repo = ref.read(menuRepositoryProvider);
       final results = await Future.wait([
@@ -93,14 +114,17 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         repo.listMenus(),
       ]);
       if (!mounted) return;
+      final menus = results[1] as List<MenuItem>;
       setState(() {
         _categories = results[0] as List<MenuCategory>;
-        _allMenus = results[1] as List<MenuItem>;
+        _allMenus = menus;
+        if (silent) _error = null;
       });
+      MenuCoverImage.warmCache(context, menus);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted && !silent) setState(() => _error = e.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !silent) setState(() => _loading = false);
     }
   }
 
@@ -119,12 +143,16 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   List<MenuItem> get _filteredMenus {
     final q = _search.trim().toLowerCase();
     if (q.isEmpty) return _categoryMenus;
-    return _categoryMenus
+    // 有搜索词时在全量菜单中检索，不受左侧分类限制
+    return _allMenus
         .where((m) => m.name.toLowerCase().contains(q))
         .toList();
   }
 
+  bool get _isSearching => _search.trim().isNotEmpty;
+
   bool _ensureDineInTable() {
+    if (ref.read(addToOrderProvider) != null) return true;
     if (ref.read(orderTypeProvider) != 'dine_in') return true;
     if (ref.read(currentTableProvider) != null) return true;
     _showSnackBar('堂食请先选择餐桌');
@@ -138,13 +166,16 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
       _addToCart(menu, 1, []);
       return;
     }
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => SpecPickerSheet(
-        menu: menu,
-        onConfirm: (qty, specs) => _addToCart(menu, qty, specs),
+    _withOverlay(
+      () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => SpecPickerSheet(
+          menu: menu,
+          onConfirm: (qty, specs) => _addToCart(menu, qty, specs),
+        ),
       ),
     );
   }
@@ -175,11 +206,14 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   }
 
   void _openCartSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CartSheet(),
+    _withOverlay(
+      () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const CartSheet(),
+      ),
     );
   }
 
@@ -191,6 +225,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
       return LoadErrorPanel(message: _error!, onRetry: _refreshAll);
     }
     if (_filteredMenus.isEmpty) {
+      final q = _search.trim();
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -201,39 +236,65 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
             color: Colors.grey.shade400,
           ),
           const SizedBox(height: 12),
-          const Center(
+          Center(
             child: Text(
-              '暂无菜品',
-              style: TextStyle(color: AppColors.textSecondary),
+              q.isEmpty ? '暂无菜品' : '未找到「$q」',
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
           ),
+          if (q.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            const Center(
+              child: Text(
+                '已在全部菜品中搜索',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ),
+          ],
         ],
       );
     }
     return ListView.separated(
+      key: PageStorageKey<String>(
+        _isSearching ? 'menu-search' : 'menu-$_activeCategory',
+      ),
+      controller: _menuScrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       itemCount: _filteredMenus.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final menu = _filteredMenus[index];
-        return MenuListTile(menu: menu, onAdd: () => _openSpecPicker(menu));
+        return MenuListTile(
+          key: ValueKey(menu.id),
+          menu: menu,
+          onAdd: () => _openSpecPicker(menu),
+        );
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cart = ref.watch(cartProvider);
-    final cartCount = cart.fold<int>(0, (sum, item) => sum + item.quantity);
-    final cartTotal = cart.fold<double>(0, (sum, item) => sum + item.lineTotal);
+    final addSession = ref.watch(addToOrderProvider);
+    final isAddMode = addSession != null;
 
-    return Scaffold(
+    return ShellTabListener(
+      tabIndex: ShellTab.ordering,
+      onReselect: () {
+        if (_overlayCount > 0) return;
+        _refreshAll(silent: true);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          OrderingHeader(onSearchChanged: (v) => setState(() => _search = v)),
-          OrderModeBar(onPickTable: _openTablePicker),
+          OrderingHeader(
+            initialQuery: _search,
+            onSearchChanged: (v) => setState(() => _search = v),
+          ),
+          const AddToOrderBanner(),
+          if (!isAddMode) OrderModeBar(onPickTable: _openTablePicker),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -247,20 +308,51 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
                   child: RefreshIndicator(
                     color: AppColors.primary,
                     onRefresh: _refreshAll,
+                    notificationPredicate: (notification) {
+                      if (_overlayCount > 0) return false;
+                      return notification.depth == 0;
+                    },
                     child: _buildMenuPanel(),
                   ),
                 ),
               ],
             ),
           ),
-          CartBottomBar(
-            itemCount: cartCount,
-            totalYuan: cartTotal,
+          _OrderingCartBar(
             onTap: _openCartSheet,
             onCheckout: _openCartSheet,
           ),
         ],
       ),
+    ),
+    );
+  }
+}
+
+class _OrderingCartBar extends ConsumerWidget {
+  const _OrderingCartBar({
+    required this.onTap,
+    required this.onCheckout,
+  });
+
+  final VoidCallback onTap;
+  final VoidCallback onCheckout;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartProvider);
+    final addSession = ref.watch(addToOrderProvider);
+    final isAddMode = addSession != null;
+    final cartCount = cart.fold<int>(0, (sum, item) => sum + item.quantity);
+    final cartTotal = cart.fold<double>(0, (sum, item) => sum + item.lineTotal);
+
+    return CartBottomBar(
+      itemCount: cartCount,
+      totalYuan: cartTotal,
+      checkoutLabel: isAddMode ? '确认加菜' : '去结算',
+      cartTitle: isAddMode ? '本次加菜' : null,
+      onTap: onTap,
+      onCheckout: onCheckout,
     );
   }
 }

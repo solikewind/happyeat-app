@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_styles.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/widgets/menu_cover_image.dart';
 
 class MenuListTile extends StatelessWidget {
   const MenuListTile({
@@ -25,18 +25,10 @@ class MenuListTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
+            MenuCoverImage(
+              menu: menu,
+              size: MenuCoverImage.listTileSize,
               borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-              child: menu.image != null && menu.image!.isNotEmpty
-                  ? CachedNetworkImage(
-                      width: 84,
-                      height: 84,
-                      fit: BoxFit.cover,
-                      imageUrl: menu.image!,
-                      placeholder: (_, __) => _imagePlaceholder(),
-                      errorWidget: (_, __, ___) => _imagePlaceholder(),
-                    )
-                  : _imagePlaceholder(),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -106,16 +98,6 @@ class MenuListTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _imagePlaceholder() {
-    return Container(
-      width: 84,
-      height: 84,
-      color: AppColors.primaryLight,
-      alignment: Alignment.center,
-      child: Icon(Icons.restaurant_menu, color: AppColors.primary.withValues(alpha: 0.5)),
     );
   }
 }

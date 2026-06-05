@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/utils/add_to_order_flow.dart';
 import '../../shared/utils/order_status_display.dart';
+import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
-import '../../shared/widgets/order_advance_button.dart';
+import '../../shared/widgets/order_cancel_dialog.dart';
+import '../../shared/widgets/order_detail_action_bar.dart';
 import '../../shared/widgets/order_status_chip.dart';
 import '../../shared/widgets/order_table_headline.dart';
 
@@ -26,6 +30,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   bool _loading = true;
   bool _updatingStatus = false;
   bool _printing = false;
+  bool _cancelling = false;
+  int? _removingItemIndex;
   String? _error;
 
   @override
@@ -61,8 +67,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     try {
       await ref.read(orderRepositoryProvider).updateOrderStatus(order.id, next);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(OrderStatusDisplay.advanceSuccessMessage(next))),
+      showBriefSnackBar(
+        context,
+        OrderStatusDisplay.advanceSuccessMessage(next),
       );
       await _load(silent: true);
     } on ApiException catch (e) {
@@ -84,7 +91,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已提交厨房打印')));
+      ).showSnackBar(const SnackBar(
+        content: Text('已提交厨房打印'),
+        duration: Duration(milliseconds: 1200),
+      ));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -100,6 +110,96 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     return order.status.trim().toLowerCase() != 'cancelled';
   }
 
+  Future<void> _removeItemAt(OrderModel order, int index) async {
+    if (_removingItemIndex != null ||
+        !OrderStatusDisplay.canAddItems(order.status)) {
+      return;
+    }
+    final item = order.items[index];
+    final isLast = order.items.length == 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isLast ? '删除最后一道菜' : '删除菜品'),
+        content: Text(
+          isLast
+              ? '「${item.menuName}」是最后一道菜，删除后将取消整单，确定继续？'
+              : '确定从订单中删除「${item.menuName}」？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: Text(isLast ? '取消订单' : '删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removingItemIndex = index);
+    try {
+      if (isLast) {
+        await ref.read(orderRepositoryProvider).cancelOrder(order.id);
+        if (!mounted) return;
+        showBriefSnackBar(context, OrderStatusDisplay.cancelSuccessMessage);
+        context.pop();
+        return;
+      }
+
+      final menus = await ref.read(menuRepositoryProvider).listMenus();
+      final menuNameToId = {for (final m in menus) m.name: m.id};
+      final remaining = [...order.items]..removeAt(index);
+      await ref.read(orderRepositoryProvider).replaceOrderItems(
+        orderId: order.id,
+        items: remaining,
+        menuNameToId: menuNameToId,
+      );
+      if (!mounted) return;
+      showBriefSnackBar(context, '已删除 ${item.menuName}');
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _removingItemIndex = null);
+    }
+  }
+
+  Future<void> _removeOrder(OrderModel order) async {
+    if (_cancelling || !OrderStatusDisplay.canRemove(order.status)) return;
+    final isDelete = OrderStatusDisplay.canDelete(order.status);
+    if (!await confirmRemoveOrder(context, isDelete: isDelete)) return;
+
+    setState(() => _cancelling = true);
+    try {
+      await ref.read(orderRepositoryProvider).cancelOrder(order.id);
+      if (!mounted) return;
+      showBriefSnackBar(
+        context,
+        isDelete
+            ? OrderStatusDisplay.deleteSuccessMessage
+            : OrderStatusDisplay.cancelSuccessMessage,
+      );
+      context.pop();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = _order;
@@ -107,43 +207,29 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         order != null &&
         OrderStatusDisplay.workbenchAdvanceTarget(order.status) != null;
     final showPrint = order != null && _canPrintKitchen(order);
-    final showBottomBar = showAdvance || showPrint;
+    final showAddItems =
+        order != null && OrderStatusDisplay.canAddItems(order.status);
+    final canEditItems = showAddItems;
+    final showRemove =
+        order != null && OrderStatusDisplay.canRemove(order.status);
+    final showBottomBar =
+        showAddItems || showAdvance || showPrint || showRemove;
     return Scaffold(
       appBar: AppBar(title: const Text('订单详情')),
       bottomNavigationBar: showBottomBar
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (showPrint)
-                      OutlinedButton.icon(
-                        onPressed: _printing
-                            ? null
-                            : () => _printKitchen(order!),
-                        icon: _printing
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.print_outlined),
-                        label: const Text('厨房打印'),
-                      ),
-                    if (showPrint && showAdvance) const SizedBox(height: 8),
-                    if (showAdvance)
-                      OrderAdvanceButton(
-                        status: order!.status,
-                        loading: _updatingStatus,
-                        onPressed: () => _advanceStatus(order),
-                      ),
-                  ],
-                ),
-              ),
+          ? OrderDetailActionBar(
+              status: order!.status,
+              onAddItems: showAddItems
+                  ? () => startAddToOrderFlow(context, ref, order: order)
+                  : null,
+              onPrint: showPrint ? () => _printKitchen(order) : null,
+              printing: _printing,
+              onAdvance: showAdvance ? () => _advanceStatus(order) : null,
+              advancing: _updatingStatus,
+              onRemove: showRemove ? () => _removeOrder(order) : null,
+              removing: _cancelling,
+              removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
+              isDelete: OrderStatusDisplay.canDelete(order.status),
             )
           : null,
       body: _loading
@@ -173,7 +259,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       ),
                     )
                   else
-                    ...order.items.map((item) => _OrderItemCard(item: item)),
+                    ...order.items.asMap().entries.map(
+                      (entry) => _OrderItemCard(
+                        item: entry.value,
+                        onRemove: canEditItems
+                            ? () => _removeItemAt(order, entry.key)
+                            : null,
+                        removing: _removingItemIndex == entry.key,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -301,32 +395,91 @@ class _AmountBlock extends StatelessWidget {
 }
 
 class _OrderItemCard extends StatelessWidget {
-  const _OrderItemCard({required this.item});
+  const _OrderItemCard({
+    required this.item,
+    this.onRemove,
+    this.removing = false,
+  });
 
   final OrderLineItem item;
+  final VoidCallback? onRemove;
+  final bool removing;
 
   @override
   Widget build(BuildContext context) {
     final lineAmount = item.amount > 0
         ? item.amount
         : item.unitPrice * item.quantity;
+    final hasSpec = item.specInfo != null && item.specInfo!.isNotEmpty;
     return Card(
-      child: ListTile(
-        title: Text(item.menuName),
-        subtitle: Text(
-          [
-            if (item.specInfo != null && item.specInfo!.isNotEmpty)
-              item.specInfo!,
-            '${item.quantity} × ${Money.formatYuan(item.unitPrice)}',
-          ].join('\n'),
-        ),
-        isThreeLine: item.specInfo != null && item.specInfo!.isNotEmpty,
-        trailing: Text(
-          Money.formatYuan(lineAmount),
-          style: const TextStyle(
-            color: AppColors.error,
-            fontWeight: FontWeight.w700,
-          ),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.menuName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  if (hasSpec) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      item.specInfo!,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item.quantity} × ${Money.formatYuan(item.unitPrice)}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  Money.formatYuan(lineAmount),
+                  style: const TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+                if (onRemove != null) ...[
+                  const SizedBox(height: 4),
+                  IconButton(
+                    onPressed: removing ? null : onRemove,
+                    icon: removing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline_rounded, size: 20),
+                    color: AppColors.error,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: '删除',
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );

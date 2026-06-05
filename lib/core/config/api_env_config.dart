@@ -7,15 +7,14 @@ enum ApiEnvironment {
   custom,
 }
 
-/// API 地址配置：改 [productionBaseUrl] 即可默认连你的服务器。
+/// API 地址配置：打包前在 [productionBaseUrl] 填写门店服务器地址即可，登录页无需填写。
 class ApiEnvConfig {
   ApiEnvConfig._();
 
-  /// 线上/服务器 API 根地址（不要末尾 `/`）。
+  /// 线上门店 API 根地址（不要末尾 `/`）。店员 App 登录时自动使用，无需在界面配置。
   ///
-  /// 打包前请改成你的域名或 IP，例如 `https://api.example.com` 或 `http://203.0.113.10:8888`。
-  /// 也可用编译参数覆盖：
-  /// `flutter build apk --dart-define=PROD_API_URL=https://api.example.com`
+  /// 部署前改成你的域名或 IP，例如 `https://api.example.com` 或 `http://203.0.113.10:8888`。
+  /// 也可用编译参数覆盖：`flutter build apk --dart-define=PROD_API_URL=https://api.example.com`
   static const String productionBaseUrl = String.fromEnvironment(
     'PROD_API_URL',
     defaultValue: 'http://43.138.118.104:8888',

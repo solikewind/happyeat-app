@@ -66,6 +66,34 @@ class ApiClient {
   }) =>
       _safe(_dio.put<dynamic>(path, data: data));
 
+  Future<Map<String, dynamic>> delete(String path) =>
+      _safe(_dio.delete<dynamic>(path));
+
+  Future<Map<String, dynamic>> postMultipart(
+    String path, {
+    required String fieldName,
+    required String filePath,
+    String? fileName,
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        fieldName: await MultipartFile.fromFile(
+          filePath,
+          filename: fileName,
+        ),
+      });
+      return _unwrap(
+        await _dio.post<dynamic>(
+          path,
+          data: form,
+          options: Options(contentType: 'multipart/form-data'),
+        ),
+      );
+    } on DioException catch (e) {
+      _rethrow(e);
+    }
+  }
+
   Future<bool> checkHealth() async {
     try {
       final dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 5)));
@@ -100,7 +128,7 @@ class ApiClient {
     }
     if (status == 500) {
       throw ApiException(
-        '服务器异常（500）。请确认 happyeat 已启动，并在项目根目录执行过 make migrate',
+        '服务器异常（500）${data is Map && data['msg'] != null ? '：${data['msg']}' : '，请查看后端日志或确认服务已启动'}',
         statusCode: status,
       );
     }

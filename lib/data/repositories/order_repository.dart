@@ -1,6 +1,7 @@
 import '../models/models.dart';
 import '../../core/network/api_client.dart';
 import '../../core/utils/money.dart';
+import '../../shared/utils/order_update_items.dart';
 
 class OrderRepository {
   OrderRepository(this._client);
@@ -51,15 +52,17 @@ class OrderRepository {
         'items': items
             .map(
               (i) => {
+                'menu_id': i.menuId,
                 'menu_name': i.name,
                 'quantity': i.quantity,
-                'unit_price': Money.yuanToApiAmount(i.unitPrice),
-                if (i.specInfo != null) 'spec_info': i.specInfo,
+                'unit_price': Money.yuanToApiInt(i.unitPrice),
+                if (i.specInfo != null && i.specInfo!.isNotEmpty)
+                  'spec_info': i.specInfo,
               },
             )
             .toList(),
-        'total_amount': Money.yuanToApiAmount(totalYuan),
-        'actual_amount': Money.yuanToApiAmount(actualYuan ?? totalYuan),
+        'total_amount': Money.yuanToApiInt(totalYuan),
+        'actual_amount': Money.yuanToApiInt(actualYuan ?? totalYuan),
         if (remark != null && remark.isNotEmpty) 'remark': remark,
       },
     );
@@ -75,6 +78,53 @@ class OrderRepository {
     await _client.post('/order/$id/print');
   }
 
+  /// 加菜/改单：提交合并后的全量明细（后端 ReplaceItems）
+  Future<OrderModel> updateOrderItems({
+    required String orderId,
+    required List<OrderLineItem> existingItems,
+    required List<CartItem> newItems,
+    required Map<String, String> menuNameToId,
+  }) async {
+    final items = OrderUpdateItems.mergeForUpdate(
+      existing: existingItems,
+      additions: newItems,
+      menuNameToId: menuNameToId,
+    );
+    return _putOrderItems(orderId, items);
+  }
+
+  /// 删菜/替换明细：提交剩余菜品全量列表
+  Future<OrderModel> replaceOrderItems({
+    required String orderId,
+    required List<OrderLineItem> items,
+    required Map<String, String> menuNameToId,
+  }) async {
+    if (items.isEmpty) {
+      throw Exception('订单至少保留一道菜，或取消整单');
+    }
+    final payload = OrderUpdateItems.mergeForUpdate(
+      existing: items,
+      additions: const [],
+      menuNameToId: menuNameToId,
+    );
+    return _putOrderItems(orderId, payload);
+  }
+
+  Future<OrderModel> _putOrderItems(
+    String orderId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final data = await _client.put(
+      '/order/$orderId',
+      data: {'items': items},
+    );
+    final order = data['order'];
+    if (order is Map<String, dynamic>) {
+      return OrderModel.fromJson(order);
+    }
+    throw Exception('更新订单失败');
+  }
+
   /// 更新订单状态（status 小写即可，会转为后端枚举大写）
   Future<void> updateOrderStatus(String id, String status) async {
     final normalized = status.trim().toLowerCase();
@@ -83,4 +133,7 @@ class OrderRepository {
       data: {'status': normalized.toUpperCase()},
     );
   }
+
+  /// 取消订单（软取消，状态变为 cancelled，非物理删除）
+  Future<void> cancelOrder(String id) => updateOrderStatus(id, 'cancelled');
 }

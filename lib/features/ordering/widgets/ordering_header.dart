@@ -3,76 +3,110 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// 点餐页顶部：品牌 + 搜索
-class OrderingHeader extends StatelessWidget {
+/// 点餐页顶部：紧凑搜索栏
+class OrderingHeader extends StatefulWidget {
   const OrderingHeader({
     super.key,
     required this.onSearchChanged,
+    this.initialQuery = '',
   });
 
   final ValueChanged<String> onSearchChanged;
+  final String initialQuery;
+
+  @override
+  State<OrderingHeader> createState() => _OrderingHeaderState();
+}
+
+class _OrderingHeaderState extends State<OrderingHeader> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+  }
+
+  @override
+  void didUpdateWidget(OrderingHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialQuery != _controller.text) {
+      _controller.text = widget.initialQuery;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _clear() {
+    _controller.clear();
+    widget.onSearchChanged('');
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final hasQuery = _controller.text.trim().isNotEmpty;
+
+    return Material(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4096FF), AppColors.primary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'H',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('快乐餐厅', style: AppStyles.pageTitle),
-                    Text('点餐台', style: AppStyles.pageSubtitle),
-                  ],
-                ),
-              ),
-            ],
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppStyles.border)),
           ),
-          const SizedBox(height: 12),
-          SearchBar(
-            hintText: '搜索菜品名称',
-            leading: Icon(Icons.search, color: AppColors.textSecondary.withValues(alpha: 0.8)),
-            backgroundColor: WidgetStateProperty.all(AppStyles.surfaceMuted),
-            elevation: WidgetStateProperty.all(0),
-            shape: WidgetStateProperty.all(
-              RoundedRectangleBorder(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+          child: TextField(
+            controller: _controller,
+            onChanged: (v) {
+              setState(() {});
+              widget.onSearchChanged(v);
+            },
+            textInputAction: TextInputAction.search,
+            style: const TextStyle(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: '搜索全部菜品',
+              hintStyle: TextStyle(
+                color: AppColors.textSecondary.withValues(alpha: 0.85),
+                fontSize: 14,
+              ),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                size: 22,
+                color: AppColors.textSecondary.withValues(alpha: 0.75),
+              ),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: _clear,
+                      tooltip: '清除',
+                    )
+                  : null,
+              filled: true,
+              fillColor: AppStyles.surfaceMuted,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 11,
+              ),
+              border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-                side: const BorderSide(color: AppStyles.border),
+                borderSide: const BorderSide(color: AppStyles.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppStyles.radiusMd),
+                borderSide: const BorderSide(color: AppStyles.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppStyles.radiusMd),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
               ),
             ),
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 12),
-            ),
-            onChanged: onSearchChanged,
           ),
-        ],
+        ),
       ),
     );
   }

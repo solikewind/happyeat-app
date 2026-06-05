@@ -11,6 +11,25 @@ class OrderStatusDisplay {
     return active.contains(status.trim().toLowerCase());
   }
 
+  /// 进行中订单是否允许加菜（与后端 UpdateOrder 一致）
+  static bool canAddItems(String status) => isActive(status);
+
+  /// 是否允许取消（进行中订单，与后端状态机 TriggerCancel 一致）
+  static bool canCancel(String status) => isActive(status);
+
+  /// 是否允许删除（已完成订单作废，后端 completed → cancelled）
+  static bool canDelete(String status) =>
+      status.trim().toLowerCase() == 'completed';
+
+  static bool canRemove(String status) => canCancel(status) || canDelete(status);
+
+  static String removeButtonLabel(String status) =>
+      canDelete(status) ? '删除' : '取消';
+
+  static String get cancelSuccessMessage => '订单已取消';
+
+  static String get deleteSuccessMessage => '订单已删除';
+
   static String label(String status) {
     switch (status.trim().toLowerCase()) {
       case 'created':
@@ -76,7 +95,7 @@ class OrderStatusDisplay {
       case 'preparing':
         return '已开始制作';
       case 'completed':
-        return '订单已完成';
+        return '已完成';
       default:
         return '状态已更新';
     }

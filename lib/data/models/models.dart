@@ -76,6 +76,7 @@ class MenuItem {
     required this.categoryId,
     this.description,
     this.image,
+    this.objectId,
     this.specs = const [],
   });
 
@@ -85,10 +86,12 @@ class MenuItem {
   final String categoryId;
   final String? description;
   final String? image;
+  final String? objectId;
   final List<MenuSpec> specs;
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     final specsRaw = json['specs'];
+    final objectIdRaw = json['object_id'];
     return MenuItem(
       id: '${json['id']}',
       name: '${json['name'] ?? ''}',
@@ -96,6 +99,7 @@ class MenuItem {
       categoryId: '${json['category_id'] ?? ''}',
       description: json['description'] as String?,
       image: json['image'] as String?,
+      objectId: objectIdRaw == null ? null : '$objectIdRaw',
       specs: specsRaw is List
           ? specsRaw
                 .map((e) => MenuSpec.fromJson(e as Map<String, dynamic>))

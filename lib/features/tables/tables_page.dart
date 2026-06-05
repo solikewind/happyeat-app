@@ -12,6 +12,7 @@ import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/order_status_display.dart';
 import '../../shared/utils/table_display.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/shell_tab_listener.dart';
 import 'widgets/table_detail_sheet.dart';
 import '../../shared/widgets/table_compact_tile.dart';
 
@@ -127,7 +128,10 @@ class _TablesPageState extends ConsumerState<TablesPage> {
     final cleaning = _countByKind(TableStatusKind.cleaning);
     final groups = _groupedTables;
 
-    return Scaffold(
+    return ShellTabListener(
+      tabIndex: ShellTab.tables,
+      onReselect: () => _load(silent: true),
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Column(
@@ -257,6 +261,7 @@ class _TablesPageState extends ConsumerState<TablesPage> {
                 ],
               ),
             ),
+      ),
     );
   }
 }
