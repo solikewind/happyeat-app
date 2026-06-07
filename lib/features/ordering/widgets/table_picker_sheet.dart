@@ -53,8 +53,11 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
   Map<String, String> get _categoryNameById =>
       TableDisplay.categoryNameById(_categories);
 
-  Map<String, List<TableItem>> get _groupedTables =>
-      TableDisplay.groupTables(_tables, _categoryNameById);
+  Map<String, List<TableItem>> get _groupedTables => TableDisplay.groupTables(
+    _tables,
+    _categoryNameById,
+    categories: _categories,
+  );
 
   @override
   void initState() {

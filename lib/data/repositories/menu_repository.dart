@@ -47,9 +47,15 @@ class MenuRepository {
     final data = await _client.get('/menus', query: query);
     final list = data['menus'];
     if (list is! List) return [];
-    return list
+    final menus = list
         .map((e) => MenuItem.fromJson(e as Map<String, dynamic>))
         .toList();
+    menus.sort((a, b) {
+      final cmp = a.sort.compareTo(b.sort);
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
+    return menus;
   }
 
   Future<MenuItem> getMenu(String id) async {

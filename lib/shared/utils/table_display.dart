@@ -97,8 +97,9 @@ class TableDisplay {
 
   static Map<String, List<TableItem>> groupTables(
     List<TableItem> tables,
-    Map<String, String> categoryNameById,
-  ) {
+    Map<String, String> categoryNameById, {
+    List<TableCategoryItem>? categories,
+  }) {
     final map = <String, List<TableItem>>{};
     for (final t in tables) {
       final name = categoryNameById[t.categoryId]?.trim();
@@ -106,10 +107,25 @@ class TableDisplay {
       map.putIfAbsent(key, () => []).add(t);
     }
     for (final list in map.values) {
-      list.sort((a, b) => a.code.compareTo(b.code));
+      list.sort((a, b) {
+        final cmp = a.sort.compareTo(b.sort);
+        if (cmp != 0) return cmp;
+        return a.code.compareTo(b.code);
+      });
     }
-    return Map.fromEntries(
-      map.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
-    );
+    final sortByName = categories == null
+        ? null
+        : {for (final c in categories) c.name: c.sort};
+    final entries = map.entries.toList()
+      ..sort((a, b) {
+        if (sortByName != null) {
+          final sa = sortByName[a.key] ?? 1 << 30;
+          final sb = sortByName[b.key] ?? 1 << 30;
+          final cmp = sa.compareTo(sb);
+          if (cmp != 0) return cmp;
+        }
+        return a.key.compareTo(b.key);
+      });
+    return Map.fromEntries(entries);
   }
 }

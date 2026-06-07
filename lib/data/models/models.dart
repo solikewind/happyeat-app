@@ -74,6 +74,7 @@ class MenuItem {
     required this.name,
     required this.priceYuan,
     required this.categoryId,
+    this.sort = 0,
     this.description,
     this.image,
     this.objectId,
@@ -84,6 +85,7 @@ class MenuItem {
   final String name;
   final double priceYuan;
   final String categoryId;
+  final int sort;
   final String? description;
   final String? image;
   final String? objectId;
@@ -97,6 +99,7 @@ class MenuItem {
       name: '${json['name'] ?? ''}',
       priceYuan: Money.apiAmountToYuan((json['price'] as num?) ?? 0),
       categoryId: '${json['category_id'] ?? ''}',
+      sort: (json['sort'] as num?)?.toInt() ?? 0,
       description: json['description'] as String?,
       image: json['image'] as String?,
       objectId: objectIdRaw == null ? null : '$objectIdRaw',
@@ -116,6 +119,7 @@ class TableItem {
     required this.status,
     required this.capacity,
     required this.categoryId,
+    this.sort = 0,
   });
 
   final String id;
@@ -123,6 +127,7 @@ class TableItem {
   final String status;
   final int capacity;
   final String categoryId;
+  final int sort;
 
   factory TableItem.fromJson(Map<String, dynamic> json) {
     return TableItem(
@@ -131,6 +136,7 @@ class TableItem {
       status: '${json['status'] ?? 'idle'}',
       capacity: (json['capacity'] as num?)?.toInt() ?? 0,
       categoryId: '${json['category_id'] ?? ''}',
+      sort: (json['sort'] as num?)?.toInt() ?? 0,
     );
   }
 }

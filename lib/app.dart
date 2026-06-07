@@ -24,6 +24,14 @@ class _HappyEatAppState extends ConsumerState<HappyEatApp> {
         }
       },
     );
+    ref.listenManual<AuthState>(
+      authProvider,
+      (prev, next) {
+        if (prev?.isLoggedIn == true && !next.isLoggedIn) {
+          clearOrderingSession(ref);
+        }
+      },
+    );
   }
 
   @override

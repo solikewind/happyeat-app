@@ -185,6 +185,7 @@ lib/
 
 - [实施计划详单](docs/PLAN.md)
 - [Android 打包速查](docs/BUILD_ANDROID.md)
+- [Bug 记录（面试向）](docs/BUGS.md)
 
 ## 技术栈
 

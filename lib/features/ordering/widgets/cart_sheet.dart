@@ -11,7 +11,10 @@ import '../../../shared/providers/add_to_order_provider.dart';
 import '../../../shared/providers/app_providers.dart';
 
 class CartSheet extends ConsumerStatefulWidget {
-  const CartSheet({super.key});
+  const CartSheet({super.key, this.onPlacedNewOrder});
+
+  /// 堂食新单下单成功（由点餐页传入，确保桌台 UI 同步清空）
+  final VoidCallback? onPlacedNewOrder;
 
   @override
   ConsumerState<CartSheet> createState() => _CartSheetState();
@@ -63,14 +66,25 @@ class _CartSheetState extends ConsumerState<CartSheet> {
           );
       ref.read(cartProvider.notifier).clear();
       if (orderType == 'dine_in') {
-        ref.read(currentTableProvider.notifier).state = null;
+        clearSelectedTable(ref);
+        widget.onPlacedNewOrder?.call();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          clearSelectedTable(ref);
+          widget.onPlacedNewOrder?.call();
+        });
       }
+      _remarkCtrl.clear();
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('下单成功，可在订单页查看')));
-        context.go('/orders');
+        final shell = StatefulNavigationShell.maybeOf(context);
+        if (shell != null) {
+          shell.goBranch(ShellTab.orders);
+        } else {
+          context.go('/orders');
+        }
       }
     } on ApiException catch (e) {
       if (mounted) {

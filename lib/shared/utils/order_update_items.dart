@@ -102,6 +102,7 @@ class _MergedLine {
       return {
         'menu_id': menuId,
         'quantity': quantity,
+        'unit_price': Money.yuanToApiInt(unitPrice),
         if (spec != null && spec.isNotEmpty) 'spec_info': spec,
       };
     }

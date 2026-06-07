@@ -15,9 +15,15 @@ class TableRepository {
     final data = await _client.get('/tables', query: query);
     final list = data['tables'];
     if (list is! List) return [];
-    return list
+    final tables = list
         .map((e) => TableItem.fromJson(e as Map<String, dynamic>))
         .toList();
+    tables.sort((a, b) {
+      final cmp = a.sort.compareTo(b.sort);
+      if (cmp != 0) return cmp;
+      return a.code.compareTo(b.code);
+    });
+    return tables;
   }
 
   Future<List<TableCategoryItem>> listTableCategories() async {
@@ -27,8 +33,14 @@ class TableRepository {
     );
     final list = data['categories'];
     if (list is! List) return [];
-    return list
+    final categories = list
         .map((e) => TableCategoryItem.fromJson(e as Map<String, dynamic>))
         .toList();
+    categories.sort((a, b) {
+      final cmp = a.sort.compareTo(b.sort);
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
+    return categories;
   }
 }

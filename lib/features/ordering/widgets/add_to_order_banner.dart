@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/providers/add_to_order_provider.dart';
 import '../../../shared/providers/app_providers.dart';
 
 /// 加菜模式顶栏：展示目标订单，可退出
@@ -54,10 +53,7 @@ class AddToOrderBanner extends ConsumerWidget {
               ),
             ),
             TextButton(
-              onPressed: () {
-                ref.read(addToOrderProvider.notifier).clear();
-                ref.read(cartProvider.notifier).clear();
-              },
+              onPressed: () => clearOrderingSession(ref),
               child: const Text('退出'),
             ),
           ],

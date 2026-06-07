@@ -99,8 +99,11 @@ class _TablesPageState extends ConsumerState<TablesPage> {
         .toList();
   }
 
-  Map<String, List<TableItem>> get _groupedTables =>
-      TableDisplay.groupTables(_filteredTables, _categoryNameById);
+  Map<String, List<TableItem>> get _groupedTables => TableDisplay.groupTables(
+    _filteredTables,
+    _categoryNameById,
+    categories: _categories,
+  );
 
   int _countByKind(TableStatusKind kind) {
     return _tables.where((t) => TableDisplay.kindOf(t.status) == kind).length;

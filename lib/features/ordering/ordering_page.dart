@@ -132,21 +132,49 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     return {for (final c in _categories) c.id: c.name};
   }
 
+  Map<String, int> get _categorySortById {
+    return {for (final c in _categories) c.id: c.sort};
+  }
+
+  List<MenuItem> _sortedMenus(
+    List<MenuItem> list, {
+    required bool groupByCategory,
+  }) {
+    return List<MenuItem>.from(list)
+      ..sort((a, b) {
+        if (groupByCategory) {
+          final catCmp = (_categorySortById[a.categoryId] ?? (1 << 30))
+              .compareTo(_categorySortById[b.categoryId] ?? (1 << 30));
+          if (catCmp != 0) return catCmp;
+          final nameCmp = (_categoryNameById[a.categoryId] ?? '').compareTo(
+            _categoryNameById[b.categoryId] ?? '',
+          );
+          if (nameCmp != 0) return nameCmp;
+        }
+        final cmp = a.sort.compareTo(b.sort);
+        if (cmp != 0) return cmp;
+        return a.id.compareTo(b.id);
+      });
+  }
+
   List<MenuItem> get _categoryMenus {
-    if (_activeCategory == 'all') return _allMenus;
-    return _allMenus.where((m) {
-      final name = _categoryNameById[m.categoryId];
-      return name == _activeCategory;
-    }).toList();
+    final list = _activeCategory == 'all'
+        ? _allMenus
+        : _allMenus.where((m) {
+            final name = _categoryNameById[m.categoryId];
+            return name == _activeCategory;
+          }).toList();
+    return _sortedMenus(list, groupByCategory: _activeCategory == 'all');
   }
 
   List<MenuItem> get _filteredMenus {
     final q = _search.trim().toLowerCase();
     if (q.isEmpty) return _categoryMenus;
     // 有搜索词时在全量菜单中检索，不受左侧分类限制
-    return _allMenus
+    final matched = _allMenus
         .where((m) => m.name.toLowerCase().contains(q))
         .toList();
+    return _sortedMenus(matched, groupByCategory: true);
   }
 
   bool get _isSearching => _search.trim().isNotEmpty;
@@ -212,7 +240,13 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         isScrollControlled: true,
         useSafeArea: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => const CartSheet(),
+        builder: (_) => CartSheet(
+          onPlacedNewOrder: () {
+            if (ref.read(orderTypeProvider) == 'dine_in') {
+              clearSelectedTable(ref);
+            }
+          },
+        ),
       ),
     );
   }

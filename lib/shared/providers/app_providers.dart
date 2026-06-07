@@ -8,6 +8,7 @@ export 'auth_provider.dart';
 export 'settings_provider.dart';
 
 import '../utils/table_display.dart';
+import 'add_to_order_provider.dart';
 import 'api_providers.dart';
 
 /// 底栏 Tab 索引，用于切换 Tab 时触发页面刷新
@@ -24,6 +25,19 @@ final shellTabIndexProvider = StateProvider<int>((ref) => ShellTab.ordering);
 final orderTypeProvider = StateProvider<String>((ref) => 'dine_in');
 
 final currentTableProvider = StateProvider<TableItem?>((ref) => null);
+
+/// 堂食新单下单成功后清桌，下一单需重新选桌
+void clearSelectedTable(WidgetRef ref) {
+  ref.read(currentTableProvider.notifier).state = null;
+}
+
+/// 清空点餐会话：购物车、桌台、加菜模式、订单类型（登出或退出加菜时）
+void clearOrderingSession(WidgetRef ref) {
+  ref.read(cartProvider.notifier).clear();
+  ref.read(currentTableProvider.notifier).state = null;
+  ref.read(addToOrderProvider.notifier).clear();
+  ref.read(orderTypeProvider.notifier).state = 'dine_in';
+}
 
 /// 餐桌分类 id → 名称（选桌、点餐栏展示用）
 final tableCategoryMapProvider = FutureProvider<Map<String, String>>((
