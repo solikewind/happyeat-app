@@ -89,7 +89,17 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
     }
   }
 
+  void _clearSelection() {
+    clearSelectedTable(ref);
+  }
+
   void _pick(TableItem table) {
+    final current = ref.read(currentTableProvider);
+    if (current?.id == table.id) {
+      _clearSelection();
+      return;
+    }
+
     ref.read(currentTableProvider.notifier).state = table;
     ref.read(orderTypeProvider.notifier).state = 'dine_in';
     widget.onSelected(table);
@@ -113,8 +123,8 @@ class _TablePickerSheetState extends ConsumerState<TablePickerSheet> {
               const Spacer(),
               if (currentLabel != null)
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('当前 $currentLabel'),
+                  onPressed: _clearSelection,
+                  child: Text('取消 · $currentLabel'),
                 ),
             ],
           ),
