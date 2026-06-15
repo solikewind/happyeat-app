@@ -90,10 +90,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                   ),
                   title: const Text(
-                    '经营统计',
+                    '订单统计',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  subtitle: const Text('每日销量、营业额与菜品明细'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/sales-stats'),
                 ),
@@ -115,7 +114,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     '菜单管理',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  subtitle: const Text('添加、修改菜品与封面'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/menu-manage'),
                 ),
@@ -157,14 +155,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '当前：${settings.apiBaseUrl}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                  if (settings.env != ApiEnvironment.production)
+                    Text(
+                      '当前：${settings.apiBaseUrl}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                  if (settings.env != ApiEnvironment.production)
+                    const SizedBox(height: 8)
+                  else
+                    const SizedBox(height: 4),
                   Row(
                     children: [
                       OutlinedButton(

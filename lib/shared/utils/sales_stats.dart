@@ -1,5 +1,3 @@
-import '../../data/models/models.dart';
-
 class DailySalesPoint {
   const DailySalesPoint({
     required this.key,
@@ -54,159 +52,88 @@ class SalesOverview {
   final List<MenuSalesRow> menuBreakdown;
 }
 
-class _MenuAgg {
-  _MenuAgg({required this.qty, required this.amount, this.spec});
-
-  int qty;
-  double amount;
-  String? spec;
-}
-
 abstract final class SalesStats {
   SalesStats._();
 
-  static const historyDays = 1;
-  static const pageSize = 200;
-  static const maxPages = 10;
+  static SalesOverview fromApi(
+    Map<String, dynamic> overviewJson,
+    Map<String, dynamic> menusJson,
+  ) {
+    final dailyRaw = overviewJson['daily'];
+    final dailyPoints = dailyRaw is List
+        ? dailyRaw
+              .whereType<Map>()
+              .map(
+                (e) => _dailyPointFromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : <DailySalesPoint>[];
 
-  static DateTime get todayStart {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
-  }
+    final summary = overviewJson['summary'];
+    final summaryMap = summary is Map
+        ? Map<String, dynamic>.from(summary)
+        : <String, dynamic>{};
 
-  static bool countsAsSale(String status) {
-    final s = status.trim().toLowerCase();
-    return s == 'completed' || s == 'paid' || s == 'preparing';
-  }
+    final today = dailyPoints.isNotEmpty
+        ? dailyPoints.last
+        : _dailyPointFromJson({
+            'date': _todayKey(),
+            'order_count': summaryMap['order_count'] ?? 0,
+            'revenue': summaryMap['revenue'] ?? 0,
+            'item_count': summaryMap['item_count'] ?? 0,
+          });
 
-  static DateTime? _parseCreatedAt(String? raw) {
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return DateTime.parse(raw).toLocal();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String _dayKey(DateTime dt) {
-    final y = dt.year;
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  static String _dayLabel(DateTime dt) {
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$m/$d';
-  }
-
-  static List<DailySalesPoint> _seedDailyPoints() {
-    final start = DateTime.now();
-    final anchor = DateTime(start.year, start.month, start.day);
-    final first = anchor.subtract(const Duration(days: historyDays - 1));
-    return List.generate(historyDays, (index) {
-      final day = first.add(Duration(days: index));
-      return DailySalesPoint(
-        key: _dayKey(day),
-        label: _dayLabel(day),
-        orderCount: 0,
-        revenue: 0,
-        itemCount: 0,
-      );
-    });
-  }
-
-  static SalesOverview fromOrders(List<OrderModel> orders) {
-    final seed = _seedDailyPoints();
-    final dayIndex = {for (var i = 0; i < seed.length; i++) seed[i].key: i};
-    final firstKey = seed.first.key;
-    final counts = List<int>.filled(seed.length, 0);
-    final revenues = List<double>.filled(seed.length, 0);
-    final itemCounts = List<int>.filled(seed.length, 0);
-
-    final menuMap = <String, _MenuAgg>{};
-    var totalRevenue = 0.0;
-    var totalOrders = 0;
-    var totalItems = 0;
-
-    for (final order in orders) {
-      if (!countsAsSale(order.status)) continue;
-      final created = _parseCreatedAt(order.createdAt);
-      if (created == null || created.isBefore(todayStart)) continue;
-
-      final key = _dayKey(created);
-      final revenue = order.actualAmount ?? order.totalAmount;
-      totalRevenue += revenue;
-      totalOrders += 1;
-
-      var orderItems = 0;
-      for (final item in order.items) {
-        orderItems += item.quantity;
-        totalItems += item.quantity;
-
-        final spec = item.specInfo?.trim();
-        final rowKey = spec == null || spec.isEmpty
-            ? item.menuName
-            : '${item.menuName}|$spec';
-        final prev = menuMap[rowKey];
-        final lineAmount = item.amount > 0
-            ? item.amount
-            : item.unitPrice * item.quantity;
-        if (prev == null) {
-          menuMap[rowKey] = _MenuAgg(
-            qty: item.quantity,
-            amount: lineAmount,
-            spec: spec,
-          );
-        } else {
-          prev.qty += item.quantity;
-          prev.amount += lineAmount;
-        }
-      }
-
-      final idx = dayIndex[key];
-      if (idx != null && key.compareTo(firstKey) >= 0) {
-        counts[idx] += 1;
-        revenues[idx] += revenue;
-        itemCounts[idx] += orderItems;
-      }
-    }
-
-    final dailyPoints = List<DailySalesPoint>.generate(seed.length, (i) {
-      return DailySalesPoint(
-        key: seed[i].key,
-        label: seed[i].label,
-        orderCount: counts[i],
-        revenue: revenues[i],
-        itemCount: itemCounts[i],
-      );
-    });
-
-    final menuBreakdown = menuMap.entries
-        .map((entry) {
-          final parts = entry.key.split('|');
-          return MenuSalesRow(
-            menuName: parts.first,
-            specInfo: entry.value.spec,
-            quantity: entry.value.qty,
-            amount: entry.value.amount,
-          );
-        })
-        .toList()
-      ..sort((a, b) {
-        final byQty = b.quantity.compareTo(a.quantity);
-        if (byQty != 0) return byQty;
-        return b.amount.compareTo(a.amount);
-      });
+    final rowsRaw = menusJson['rows'];
+    final menuBreakdown = rowsRaw is List
+        ? rowsRaw
+              .whereType<Map>()
+              .map((e) => _menuRowFromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : <MenuSalesRow>[];
 
     return SalesOverview(
       dailyPoints: dailyPoints,
-      today: dailyPoints.last,
-      totalRevenue: totalRevenue,
-      totalOrders: totalOrders,
-      totalItems: totalItems,
+      today: today,
+      totalRevenue: _amountToYuan(summaryMap['revenue']),
+      totalOrders: (summaryMap['order_count'] as num?)?.toInt() ?? today.orderCount,
+      totalItems: (summaryMap['item_count'] as num?)?.toInt() ?? today.itemCount,
       menuBreakdown: menuBreakdown,
     );
+  }
+
+  static DailySalesPoint _dailyPointFromJson(Map<String, dynamic> json) {
+    final date = (json['date'] as String?) ?? _todayKey();
+    final dt = DateTime.tryParse(date);
+    return DailySalesPoint(
+      key: date,
+      label: dt == null ? date : '${dt.month}月${dt.day}日',
+      orderCount: (json['order_count'] as num?)?.toInt() ?? 0,
+      revenue: _amountToYuan(json['revenue']),
+      itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  static MenuSalesRow _menuRowFromJson(Map<String, dynamic> json) {
+    final spec = (json['spec_info'] as String?)?.trim();
+    return MenuSalesRow(
+      menuName: (json['menu_name'] as String?) ?? '',
+      specInfo: spec == null || spec.isEmpty ? null : spec,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      amount: _amountToYuan(json['amount']),
+    );
+  }
+
+  static double _amountToYuan(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw.toString()) ?? 0;
+  }
+
+  static String _todayKey() {
+    final now = DateTime.now();
+    final y = now.year;
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 }

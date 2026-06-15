@@ -6,10 +6,13 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/sales_stats.dart';
+import '../../shared/utils/stats_range.dart';
 import '../../shared/widgets/load_error_panel.dart';
 
 class SalesMenuDetailPage extends ConsumerStatefulWidget {
-  const SalesMenuDetailPage({super.key});
+  const SalesMenuDetailPage({super.key, required this.range});
+
+  final StatsRange range;
 
   @override
   ConsumerState<SalesMenuDetailPage> createState() =>
@@ -33,7 +36,10 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
       _error = null;
     });
     try {
-      final overview = await ref.read(statsRepositoryProvider).loadSalesOverview();
+      final overview = await ref.read(statsRepositoryProvider).loadSalesOverview(
+        startDate: widget.range.startDate,
+        endDate: widget.range.endDate,
+      );
       if (mounted) setState(() => _rows = overview.menuBreakdown);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -56,9 +62,19 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
           : _rows.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 120),
-                Center(child: Text('今日暂无售出记录')),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Text(
+                    widget.range.displayRange,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 120),
+                const Center(child: Text('该时段暂无售出记录')),
               ],
             )
           : RefreshIndicator(
@@ -67,6 +83,14 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
+                  Text(
+                    widget.range.displayRange,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -74,13 +98,13 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
                         children: [
                           Expanded(
                             child: _TotalBlock(
-                              label: '今日售出',
+                              label: '售出',
                               value: '$totalQty 份',
                             ),
                           ),
                           Expanded(
                             child: _TotalBlock(
-                              label: '今日金额',
+                              label: '金额',
                               value: Money.formatYuan(totalAmount),
                               emphasized: true,
                             ),

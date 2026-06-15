@@ -1,43 +1,35 @@
-import '../models/models.dart';
 import '../../core/network/api_client.dart';
 import '../../shared/utils/sales_stats.dart';
-import 'order_repository.dart';
 
 class StatsRepository {
   StatsRepository(this._client);
 
   final ApiClient _client;
 
-  Future<SalesOverview> loadSalesOverview() async {
-    final orders = await _fetchRecentOrders();
-    return SalesStats.fromOrders(orders);
-  }
-
-  Future<List<OrderModel>> _fetchRecentOrders() async {
-    final repo = OrderRepository(_client);
-    final first = await repo.listOrders(
-      current: 1,
-      pageSize: SalesStats.pageSize,
-    );
-    final all = <OrderModel>[...first.orders];
-    final total = first.total;
-    if (all.length >= total) return all;
-
-    for (var page = 2; page <= SalesStats.maxPages; page++) {
-      final res = await repo.listOrders(
-        current: page,
-        pageSize: SalesStats.pageSize,
-      );
-      if (res.orders.isEmpty) break;
-      all.addAll(res.orders);
-
-      final oldest = res.orders.last.createdAt;
-      if (oldest != null) {
-        final dt = DateTime.tryParse(oldest)?.toLocal();
-        if (dt != null && dt.isBefore(SalesStats.todayStart)) break;
-      }
-      if (all.length >= total) break;
+  /// 加载经营统计；[startDate]/[endDate] 格式 YYYY-MM-DD，均可缺省为今天。
+  Future<SalesOverview> loadSalesOverview({
+    String? startDate,
+    String? endDate,
+  }) async {
+    final hasRange =
+        (startDate != null && startDate.isNotEmpty) ||
+        (endDate != null && endDate.isNotEmpty);
+    final query = <String, dynamic>{};
+    if (startDate != null && startDate.isNotEmpty) {
+      query['start_date'] = startDate;
     }
-    return all;
+    if (endDate != null && endDate.isNotEmpty) {
+      query['end_date'] = endDate;
+    }
+
+    final overview = hasRange
+        ? await _client.get('/stats/daily', query: query)
+        : await _client.get('/stats/daily/overview');
+
+    final menus = hasRange
+        ? await _client.get('/stats/menus', query: query)
+        : await _client.get('/stats/menus');
+
+    return SalesStats.fromApi(overview, menus);
   }
 }

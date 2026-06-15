@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
@@ -13,6 +14,17 @@ class HappyEatApp extends ConsumerStatefulWidget {
 }
 
 class _HappyEatAppState extends ConsumerState<HappyEatApp> {
+  static const _localizations = [
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ];
+
+  static const _supportedLocales = [
+    Locale('zh', 'CN'),
+    Locale('en', 'US'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +54,9 @@ class _HappyEatAppState extends ConsumerState<HappyEatApp> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
+        locale: const Locale('zh', 'CN'),
+        localizationsDelegates: _localizations,
+        supportedLocales: _supportedLocales,
         home: const Scaffold(
           body: Center(
             child: Column(
@@ -62,6 +77,9 @@ class _HappyEatAppState extends ConsumerState<HappyEatApp> {
       title: 'HappyEat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      locale: const Locale('zh', 'CN'),
+      localizationsDelegates: _localizations,
+      supportedLocales: _supportedLocales,
       routerConfig: router,
     );
   }

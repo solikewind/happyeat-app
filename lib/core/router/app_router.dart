@@ -14,6 +14,7 @@ import '../../features/profile/sales_stats_page.dart';
 import '../../features/shell/main_shell.dart';
 import '../../features/tables/tables_page.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/utils/stats_range.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -89,7 +90,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'menus',
-            builder: (context, state) => const SalesMenuDetailPage(),
+            builder: (context, state) {
+              final range = state.extra as StatsRange?;
+              return SalesMenuDetailPage(
+                range: range ?? StatsRange.resolve(StatsRangePreset.today),
+              );
+            },
           ),
         ],
       ),

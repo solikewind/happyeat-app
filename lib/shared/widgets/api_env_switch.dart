@@ -47,16 +47,18 @@ class ApiEnvSwitch extends ConsumerWidget {
             onUrlSynced?.call();
           },
         ),
-        const SizedBox(height: 6),
-        Text(
-          env == ApiEnvironment.custom
-              ? '当前为自定义地址（与预设环境不一致）'
-              : '当前：${ApiEnvConfig.envLabel(env)}',
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
+        if (env != ApiEnvironment.production) ...[
+          const SizedBox(height: 6),
+          Text(
+            env == ApiEnvironment.custom
+                ? '当前为自定义地址（与预设环境不一致）'
+                : '当前：${ApiEnvConfig.envLabel(env)}',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
