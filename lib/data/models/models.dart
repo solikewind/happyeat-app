@@ -1,4 +1,5 @@
 import '../../core/utils/money.dart';
+import '../../shared/utils/datetime_display.dart';
 
 class LoginResult {
   LoginResult({
@@ -179,6 +180,7 @@ class OrderModel {
     this.tableCode,
     this.tableCategory,
     this.remark,
+    this.settlementId,
     this.items = const [],
     this.createdAt,
   });
@@ -193,6 +195,7 @@ class OrderModel {
   final String? tableCode;
   final String? tableCategory;
   final String? remark;
+  final String? settlementId;
   final List<OrderLineItem> items;
   final String? createdAt;
 
@@ -207,19 +210,8 @@ class OrderModel {
     return '堂食';
   }
 
-  /// 列表/详情展示用，如 6/3 18:42
-  String? get createdAtLabel {
-    final raw = createdAt;
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '${dt.month}/${dt.day} $h:$m';
-    } catch (_) {
-      return null;
-    }
-  }
+  /// 列表/详情展示用，如 2026/6/16 18:42
+  String? get createdAtLabel => DateTimeDisplay.formatDateTime(createdAt);
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     final itemsRaw = json['items'];
@@ -236,12 +228,67 @@ class OrderModel {
       tableCode: json['table_code'] as String?,
       tableCategory: json['table_category'] as String?,
       remark: json['remark'] as String?,
+      settlementId: json['settlement_id'] != null
+          ? '${json['settlement_id']}'
+          : null,
       items: itemsRaw is List
           ? itemsRaw
                 .map((e) => OrderLineItem.fromJson(e as Map<String, dynamic>))
                 .toList()
           : [],
       createdAt: json['created_at'] as String?,
+    );
+  }
+}
+
+class SettlementModel {
+  SettlementModel({
+    required this.id,
+    required this.customerName,
+    required this.status,
+    required this.totalAmount,
+    this.actualAmount = 0,
+    this.remark,
+    this.orderCount = 0,
+    this.settledAt,
+    this.createdAt,
+    this.updatedAt,
+    this.orders = const [],
+  });
+
+  final String id;
+  final String customerName;
+  final String status;
+  final double totalAmount;
+  final double actualAmount;
+  final String? remark;
+  final int orderCount;
+  final String? settledAt;
+  final String? createdAt;
+  final String? updatedAt;
+  final List<OrderModel> orders;
+
+  bool get isUnsettled => status.toUpperCase() == 'UNSETTLED';
+
+  factory SettlementModel.fromJson(Map<String, dynamic> json) {
+    final ordersRaw = json['orders'];
+    final orders = ordersRaw is List
+        ? ordersRaw
+              .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <OrderModel>[];
+    return SettlementModel(
+      id: '${json['id']}',
+      customerName: '${json['customer_name'] ?? ''}',
+      status: '${json['status'] ?? ''}',
+      totalAmount: Money.apiAmountToYuan((json['total_amount'] as num?) ?? 0),
+      actualAmount: Money.apiAmountToYuan((json['actual_amount'] as num?) ?? 0),
+      remark: json['remark'] as String?,
+      orderCount: (json['order_count'] as num?)?.toInt() ?? orders.length,
+      settledAt: json['settled_at'] as String?,
+      createdAt: json['created_at'] as String?,
+      updatedAt: json['updated_at'] as String?,
+      orders: orders,
     );
   }
 }

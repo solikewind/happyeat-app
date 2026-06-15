@@ -76,6 +76,19 @@ class TableDisplay {
     }
   }
 
+  /// 厅面看板展示用：后端桌态未同步时，有进行中订单则按「使用中」显示（仅 UI，不改桌台数据）。
+  static String hallDisplayStatus(
+    String tableStatus, {
+    required bool hasActiveOrder,
+  }) {
+    if (!hasActiveOrder) return tableStatus;
+    final kind = kindOf(tableStatus);
+    if (kind == TableStatusKind.idle || kind == TableStatusKind.unknown) {
+      return 'using';
+    }
+    return tableStatus;
+  }
+
   static Map<String, String> categoryNameById(
     List<TableCategoryItem> categories,
   ) {

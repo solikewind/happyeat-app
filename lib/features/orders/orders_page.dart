@@ -8,13 +8,16 @@ import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/add_to_order_flow.dart';
+import '../../shared/utils/order_advance_flow.dart';
 import '../../shared/utils/order_status_display.dart';
 import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
 import '../../shared/widgets/order_action_tile.dart';
-import '../../shared/widgets/order_advance_button.dart';
 import '../../shared/widgets/order_cancel_dialog.dart';
 import '../../shared/widgets/order_status_chip.dart';
+import '../../shared/widgets/order_swipe_actions.dart';
+import '../../shared/widgets/order_swipe_group.dart';
+import '../../shared/widgets/order_swipe_scope.dart';
 import '../../shared/widgets/order_table_headline.dart';
 import '../../shared/widgets/shell_tab_listener.dart';
 
@@ -33,6 +36,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   String? _printingOrderId;
   String? _cancellingOrderId;
   String? _error;
+  final _swipeGroup = OrderSwipeGroup();
 
   @override
   void initState() {
@@ -60,24 +64,16 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Future<void> _advanceStatus(OrderModel order) async {
-    final next = OrderStatusDisplay.workbenchAdvanceTarget(order.status);
-    if (next == null || _updatingOrderId != null) return;
+    if (_updatingOrderId != null) return;
 
     setState(() => _updatingOrderId = order.id);
     try {
-      await ref.read(orderRepositoryProvider).updateOrderStatus(order.id, next);
-      if (!mounted) return;
-      showBriefSnackBar(
-        context,
-        OrderStatusDisplay.advanceSuccessMessage(next),
+      final ok = await advanceOrderWithConfirm(
+        context: context,
+        ref: ref,
+        order: order,
       );
-      await _load(silent: true);
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
+      if (ok && mounted) await _load(silent: true);
     } finally {
       if (mounted) setState(() => _updatingOrderId = null);
     }
@@ -232,7 +228,16 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                         ),
                       ],
                     )
-                  : ListView.separated(
+                  : OrderSwipeScope(
+                      group: _swipeGroup,
+                      child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification) {
+                          _swipeGroup.closeCurrent();
+                        }
+                        return false;
+                      },
+                      child: ListView.separated(
                       padding: const EdgeInsets.all(12),
                       itemCount: _orders.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -266,6 +271,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                           onTap: () => context.push('/orders/${order.id}'),
                         );
                       },
+                    ),
+                    ),
                     ),
             ),
           ),
@@ -335,8 +342,12 @@ class _OrderCard extends StatelessWidget {
     final summary = order.items.length > 2
         ? '$summaryItems 等$itemCount件'
         : summaryItems;
+    final isActive = OrderStatusDisplay.isActive(order.status);
+    final showSwipeActions = isActive &&
+        (onPrint != null || onRemove != null);
 
-    return Card(
+    final card = Card(
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -403,6 +414,28 @@ class _OrderCard extends StatelessWidget {
                                 ),
                               ),
                             ],
+                            if (showSwipeActions) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.swipe_left_alt_rounded,
+                                    size: 14,
+                                    color: AppColors.textSecondary
+                                        .withValues(alpha: 0.7),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '左滑操作',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary
+                                          .withValues(alpha: 0.85),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -416,16 +449,10 @@ class _OrderCard extends StatelessWidget {
                 onRemove != null ||
                 onAddItems != null) ...[
               const SizedBox(height: 10),
-              if (onAdvance != null) ...[
-                OrderAdvanceButton(
-                  status: order.status,
-                  loading: advancing,
-                  onPressed: onAdvance,
-                ),
-                if (onPrint != null || onRemove != null || onAddItems != null)
-                  const SizedBox(height: 8),
-              ],
-              OrderCardSecondaryActions(
+              OrderListActionBar(
+                status: order.status,
+                onAdvance: onAdvance,
+                advancing: advancing,
                 onAddItems: onAddItems,
                 onPrint: onPrint,
                 printing: printing,
@@ -433,11 +460,23 @@ class _OrderCard extends StatelessWidget {
                 removing: cancelling,
                 removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
                 isDelete: OrderStatusDisplay.canDelete(order.status),
+                hidePrintAndRemove: isActive,
               ),
             ],
           ],
         ),
       ),
+    );
+
+    if (!showSwipeActions) return card;
+
+    return OrderSwipeActions(
+      onPrint: onPrint,
+      printing: printing,
+      onRemove: onRemove,
+      removing: cancelling,
+      removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
+      child: card,
     );
   }
 }

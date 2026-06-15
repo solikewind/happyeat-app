@@ -4,6 +4,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../data/repositories/menu_repository.dart';
 import '../../data/repositories/order_repository.dart';
+import '../../data/repositories/settlement_repository.dart';
 import '../../data/repositories/stats_repository.dart';
 import '../../data/repositories/table_repository.dart';
 import 'settings_provider.dart';
@@ -42,4 +43,8 @@ final tableRepositoryProvider = Provider<TableRepository>((ref) {
 
 final statsRepositoryProvider = Provider<StatsRepository>((ref) {
   return StatsRepository(ref.watch(apiClientProvider));
+});
+
+final settlementRepositoryProvider = Provider<SettlementRepository>((ref) {
+  return SettlementRepository(ref.watch(apiClientProvider));
 });

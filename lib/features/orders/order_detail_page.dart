@@ -8,6 +8,7 @@ import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/add_to_order_flow.dart';
+import '../../shared/utils/order_advance_flow.dart';
 import '../../shared/utils/order_status_display.dart';
 import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
@@ -15,6 +16,7 @@ import '../../shared/widgets/order_cancel_dialog.dart';
 import '../../shared/widgets/order_detail_action_bar.dart';
 import '../../shared/widgets/order_status_chip.dart';
 import '../../shared/widgets/order_table_headline.dart';
+import '../profile/add_settlement_orders_sheet.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   const OrderDetailPage({super.key, required this.orderId});
@@ -60,24 +62,16 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   Future<void> _advanceStatus(OrderModel order) async {
-    final next = OrderStatusDisplay.workbenchAdvanceTarget(order.status);
-    if (next == null || _updatingStatus) return;
+    if (_updatingStatus) return;
 
     setState(() => _updatingStatus = true);
     try {
-      await ref.read(orderRepositoryProvider).updateOrderStatus(order.id, next);
-      if (!mounted) return;
-      showBriefSnackBar(
-        context,
-        OrderStatusDisplay.advanceSuccessMessage(next),
+      final ok = await advanceOrderWithConfirm(
+        context: context,
+        ref: ref,
+        order: order,
       );
-      await _load(silent: true);
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
+      if (ok && mounted) await _load(silent: true);
     } finally {
       if (mounted) setState(() => _updatingStatus = false);
     }
@@ -200,6 +194,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     }
   }
 
+  Future<void> _handleSettlement(OrderModel order) async {
+    final settlementId = order.settlementId;
+    if (settlementId != null && settlementId.isNotEmpty) {
+      await context.push('/settlements/$settlementId');
+      if (mounted) await _load(silent: true);
+      return;
+    }
+    if (order.status == 'cancelled') return;
+    final changed = await showAddOrderToSettlementSheet(context, order: order);
+    if (changed == true && mounted) await _load(silent: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = _order;
@@ -212,8 +218,16 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final canEditItems = showAddItems;
     final showRemove =
         order != null && OrderStatusDisplay.canRemove(order.status);
-    final showBottomBar =
-        showAddItems || showAdvance || showPrint || showRemove;
+    final settlementId = order?.settlementId;
+    final hasSettlement =
+        settlementId != null && settlementId.isNotEmpty;
+    final showSettlement =
+        order != null && order.status != 'cancelled';
+    final showBottomBar = showAddItems ||
+        showAdvance ||
+        showPrint ||
+        showRemove ||
+        showSettlement;
     return Scaffold(
       appBar: AppBar(title: const Text('订单详情')),
       bottomNavigationBar: showBottomBar
@@ -230,6 +244,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               removing: _cancelling,
               removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
               isDelete: OrderStatusDisplay.canDelete(order.status),
+              onSettlement:
+                  showSettlement ? () => _handleSettlement(order) : null,
+              settlementLabel: hasSettlement ? '结账单' : '记账',
             )
           : null,
       body: _loading
@@ -245,29 +262,41 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _OrderSummaryCard(order: order),
-                  const SizedBox(height: 12),
-                  Text(
-                    '菜品明细 · ${order.items.fold<int>(0, (sum, e) => sum + e.quantity)}件',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  if (order.items.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: Text('暂无菜品明细')),
-                      ),
-                    )
-                  else
-                    ...order.items.asMap().entries.map(
-                      (entry) => _OrderItemCard(
-                        item: entry.value,
-                        onRemove: canEditItems
-                            ? () => _removeItemAt(order, entry.key)
-                            : null,
-                        removing: _removingItemIndex == entry.key,
+                  if (hasSettlement) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.receipt_long_outlined,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                        title: const Text(
+                          '已加入结账单',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text('结账单 #$settlementId'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _handleSettlement(order),
                       ),
                     ),
+                  ],
+                  const SizedBox(height: 12),
+                  _OrderItemsSection(
+                    order: order,
+                    canEditItems: canEditItems,
+                    removingItemIndex: _removingItemIndex,
+                    onRemoveItem: canEditItems
+                        ? (index) => _removeItemAt(order, index)
+                        : null,
+                  ),
                 ],
               ),
             ),
@@ -292,7 +321,7 @@ class _OrderSummaryCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: OrderTableHeadline(order: order)),
+                Expanded(child: OrderTableHeadline(order: order, compact: true)),
                 const SizedBox(width: 12),
                 Text(
                   Money.formatYuan(order.totalAmount),
@@ -394,8 +423,62 @@ class _AmountBlock extends StatelessWidget {
   }
 }
 
-class _OrderItemCard extends StatelessWidget {
-  const _OrderItemCard({
+class _OrderItemsSection extends StatelessWidget {
+  const _OrderItemsSection({
+    required this.order,
+    required this.canEditItems,
+    this.removingItemIndex,
+    this.onRemoveItem,
+  });
+
+  final OrderModel order;
+  final bool canEditItems;
+  final int? removingItemIndex;
+  final void Function(int index)? onRemoveItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final itemCount = order.items.fold<int>(0, (sum, e) => sum + e.quantity);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '菜品明细 · $itemCount 件',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        if (order.items.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: Text('暂无菜品明细')),
+            ),
+          )
+        else
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var i = 0; i < order.items.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  _OrderItemRow(
+                    item: order.items[i],
+                    onRemove: onRemoveItem != null
+                        ? () => onRemoveItem!(i)
+                        : null,
+                    removing: removingItemIndex == i,
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _OrderItemRow extends StatelessWidget {
+  const _OrderItemRow({
     required this.item,
     this.onRemove,
     this.removing = false,
@@ -411,76 +494,75 @@ class _OrderItemCard extends StatelessWidget {
         ? item.amount
         : item.unitPrice * item.quantity;
     final hasSpec = item.specInfo != null && item.specInfo!.isNotEmpty;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.menuName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.menuName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    height: 1.35,
                   ),
-                  if (hasSpec) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      item.specInfo!,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
+                ),
+                if (hasSpec) ...[
                   const SizedBox(height: 4),
                   Text(
-                    '${item.quantity} × ${Money.formatYuan(item.unitPrice)}',
+                    item.specInfo!,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
+                      height: 1.4,
                     ),
                   ),
                 ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
+                const SizedBox(height: 6),
                 Text(
-                  Money.formatYuan(lineAmount),
+                  '${item.quantity} × ${Money.formatYuan(item.unitPrice)}',
                   style: const TextStyle(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
                   ),
                 ),
-                if (onRemove != null) ...[
-                  const SizedBox(height: 4),
-                  IconButton(
-                    onPressed: removing ? null : onRemove,
-                    icon: removing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.delete_outline_rounded, size: 20),
-                    color: AppColors.error,
-                    visualDensity: VisualDensity.compact,
-                    tooltip: '删除',
-                  ),
-                ],
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                Money.formatYuan(lineAmount),
+                style: const TextStyle(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              if (onRemove != null)
+                IconButton(
+                  onPressed: removing ? null : onRemove,
+                  icon: removing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline_rounded, size: 20),
+                  color: AppColors.error,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '删除',
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -42,7 +42,10 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 
   void _onTabSelected(int index) {
-    widget.navigationShell.goBranch(index);
+    widget.navigationShell.goBranch(
+      index,
+      initialLocation: index == widget.navigationShell.currentIndex,
+    );
     ref.read(shellTabIndexProvider.notifier).state = index;
   }
 

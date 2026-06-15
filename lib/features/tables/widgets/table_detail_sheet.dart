@@ -52,7 +52,12 @@ class _TableDetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusColor = TableDisplay.statusColor(table.status);
+    final hasActiveOrder = activeOrders.isNotEmpty;
+    final displayStatus = TableDisplay.hallDisplayStatus(
+      table.status,
+      hasActiveOrder: hasActiveOrder,
+    );
+    final statusColor = TableDisplay.statusColor(displayStatus);
 
     return ListView(
       controller: scrollController,
@@ -68,7 +73,7 @@ class _TableDetailBody extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                TableDisplay.statusIcon(table.status),
+                TableDisplay.statusIcon(displayStatus),
                 color: statusColor,
               ),
             ),
@@ -86,7 +91,7 @@ class _TableDetailBody extends ConsumerWidget {
                       if (categoryName != null && categoryName!.isNotEmpty)
                         categoryName!,
                       '${table.capacity} 人',
-                      TableDisplay.statusLabel(table.status),
+                      TableDisplay.statusLabel(displayStatus),
                     ].join(' · '),
                     style: AppStyles.pageSubtitle,
                   ),

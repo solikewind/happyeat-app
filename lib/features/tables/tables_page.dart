@@ -95,7 +95,11 @@ class _TablesPageState extends ConsumerState<TablesPage> {
   List<TableItem> get _filteredTables {
     if (_statusFilter == null || _statusFilter!.isEmpty) return _tables;
     return _tables
-        .where((t) => t.status.toLowerCase() == _statusFilter!.toLowerCase())
+        .where(
+          (t) =>
+              _hallDisplayStatus(t).toLowerCase() ==
+              _statusFilter!.toLowerCase(),
+        )
         .toList();
   }
 
@@ -106,11 +110,20 @@ class _TablesPageState extends ConsumerState<TablesPage> {
   );
 
   int _countByKind(TableStatusKind kind) {
-    return _tables.where((t) => TableDisplay.kindOf(t.status) == kind).length;
+    return _tables
+        .where((t) => TableDisplay.kindOf(_hallDisplayStatus(t)) == kind)
+        .length;
   }
 
   List<OrderModel> _ordersForTable(String tableId) {
     return _activeOrders.where((o) => o.tableId == tableId).toList();
+  }
+
+  String _hallDisplayStatus(TableItem table) {
+    return TableDisplay.hallDisplayStatus(
+      table.status,
+      hasActiveOrder: _ordersForTable(table.id).isNotEmpty,
+    );
   }
 
   void _openTableDetail(TableItem table) {
@@ -253,6 +266,7 @@ class _TablesPageState extends ConsumerState<TablesPage> {
                               final table = entry.value[index];
                               return TableCompactTile(
                                 table: table,
+                                displayStatus: _hallDisplayStatus(table),
                                 onTap: () => _openTableDetail(table),
                               );
                             },

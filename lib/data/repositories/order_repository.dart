@@ -12,10 +12,14 @@ class OrderRepository {
     int current = 1,
     int pageSize = 20,
     String? status,
+    String? orderNo,
   }) async {
     final query = <String, dynamic>{'current': current, 'pageSize': pageSize};
     if (status != null && status.isNotEmpty) {
       query['status'] = status.toUpperCase();
+    }
+    if (orderNo != null && orderNo.trim().isNotEmpty) {
+      query['order_no'] = orderNo.trim();
     }
     final data = await _client.get('/orders', query: query);
     final list = data['orders'];
@@ -126,12 +130,17 @@ class OrderRepository {
   }
 
   /// 更新订单状态（status 小写即可，会转为后端枚举大写）
-  Future<void> updateOrderStatus(String id, String status) async {
+  Future<void> updateOrderStatus(
+    String id,
+    String status, {
+    double? actualYuan,
+  }) async {
     final normalized = status.trim().toLowerCase();
-    await _client.put(
-      '/order/$id/status',
-      data: {'status': normalized.toUpperCase()},
-    );
+    final data = <String, dynamic>{'status': normalized.toUpperCase()};
+    if (actualYuan != null) {
+      data['actual_amount'] = Money.yuanToApiInt(actualYuan);
+    }
+    await _client.put('/order/$id/status', data: data);
   }
 
   /// 取消订单（软取消，状态变为 cancelled，非物理删除）

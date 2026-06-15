@@ -4,14 +4,27 @@ class DailySalesPoint {
     required this.label,
     required this.orderCount,
     required this.revenue,
+    required this.receivable,
+    required this.actualRevenue,
     required this.itemCount,
   });
 
   final String key;
   final String label;
   final int orderCount;
+  /// 实收（与 revenue 一致，兼容旧字段）
   final double revenue;
+  /// 应收合计
+  final double receivable;
+  /// 实收合计
+  final double actualRevenue;
   final int itemCount;
+
+  double get collectionGap =>
+      receivable > actualRevenue ? receivable - actualRevenue : 0;
+
+  double get collectionRate =>
+      receivable <= 0 ? 1 : (actualRevenue / receivable).clamp(0.0, 1.0);
 }
 
 class MenuSalesRow {
@@ -39,6 +52,8 @@ class SalesOverview {
     required this.dailyPoints,
     required this.today,
     required this.totalRevenue,
+    required this.totalReceivable,
+    required this.totalActualRevenue,
     required this.totalOrders,
     required this.totalItems,
     required this.menuBreakdown,
@@ -47,9 +62,19 @@ class SalesOverview {
   final List<DailySalesPoint> dailyPoints;
   final DailySalesPoint today;
   final double totalRevenue;
+  final double totalReceivable;
+  final double totalActualRevenue;
   final int totalOrders;
   final int totalItems;
   final List<MenuSalesRow> menuBreakdown;
+
+  double get collectionGap => totalReceivable > totalActualRevenue
+      ? totalReceivable - totalActualRevenue
+      : 0;
+
+  double get collectionRate => totalReceivable <= 0
+      ? 1
+      : (totalActualRevenue / totalReceivable).clamp(0.0, 1.0);
 }
 
 abstract final class SalesStats {
@@ -80,6 +105,9 @@ abstract final class SalesStats {
             'date': _todayKey(),
             'order_count': summaryMap['order_count'] ?? 0,
             'revenue': summaryMap['revenue'] ?? 0,
+            'receivable': summaryMap['receivable'] ?? summaryMap['revenue'] ?? 0,
+            'actual_revenue':
+                summaryMap['actual_revenue'] ?? summaryMap['revenue'] ?? 0,
             'item_count': summaryMap['item_count'] ?? 0,
           });
 
@@ -91,12 +119,23 @@ abstract final class SalesStats {
               .toList()
         : <MenuSalesRow>[];
 
+    final totalActual = _amountToYuan(
+      summaryMap['actual_revenue'] ?? summaryMap['revenue'],
+    );
+    final totalReceivable = _amountToYuan(
+      summaryMap['receivable'] ?? summaryMap['revenue'],
+    );
+
     return SalesOverview(
       dailyPoints: dailyPoints,
       today: today,
-      totalRevenue: _amountToYuan(summaryMap['revenue']),
-      totalOrders: (summaryMap['order_count'] as num?)?.toInt() ?? today.orderCount,
-      totalItems: (summaryMap['item_count'] as num?)?.toInt() ?? today.itemCount,
+      totalRevenue: totalActual,
+      totalReceivable: totalReceivable,
+      totalActualRevenue: totalActual,
+      totalOrders:
+          (summaryMap['order_count'] as num?)?.toInt() ?? today.orderCount,
+      totalItems:
+          (summaryMap['item_count'] as num?)?.toInt() ?? today.itemCount,
       menuBreakdown: menuBreakdown,
     );
   }
@@ -104,11 +143,15 @@ abstract final class SalesStats {
   static DailySalesPoint _dailyPointFromJson(Map<String, dynamic> json) {
     final date = (json['date'] as String?) ?? _todayKey();
     final dt = DateTime.tryParse(date);
+    final actual = _amountToYuan(json['actual_revenue'] ?? json['revenue']);
+    final receivable = _amountToYuan(json['receivable'] ?? json['revenue']);
     return DailySalesPoint(
       key: date,
       label: dt == null ? date : '${dt.month}月${dt.day}日',
       orderCount: (json['order_count'] as num?)?.toInt() ?? 0,
-      revenue: _amountToYuan(json['revenue']),
+      revenue: actual,
+      receivable: receivable,
+      actualRevenue: actual,
       itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
     );
   }

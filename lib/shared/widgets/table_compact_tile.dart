@@ -12,16 +12,20 @@ class TableCompactTile extends StatelessWidget {
     required this.table,
     required this.onTap,
     this.selected = false,
+    this.displayStatus,
   });
 
   final TableItem table;
   final VoidCallback onTap;
   final bool selected;
+  /// 覆盖展示状态（厅面看板按订单推导时使用，不影响 [table.status]）
+  final String? displayStatus;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = TableDisplay.statusColor(table.status);
-    final statusLabel = TableDisplay.statusLabel(table.status);
+    final status = displayStatus ?? table.status;
+    final statusColor = TableDisplay.statusColor(status);
+    final statusLabel = TableDisplay.statusLabel(status);
 
     return Material(
       color: selected ? AppColors.primaryLight : Colors.white,

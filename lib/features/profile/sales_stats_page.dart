@@ -253,9 +253,7 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
                       child: Center(child: Text('暂无数据')),
                     )
                   else ...[
-                    _SummaryRow(overview: overview),
                     if (_showDayDetail) ...[
-                      const SizedBox(height: 12),
                       _HighlightCard(
                         point: overview.today,
                         caption: _highlightCaption,
@@ -266,6 +264,14 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
                         showHeader: true,
                       ),
                     ] else ...[
+                      _RevenueCompareCard(
+                        receivable: overview.totalReceivable,
+                        actual: overview.totalActualRevenue,
+                        gap: overview.collectionGap,
+                        rate: overview.collectionRate,
+                      ),
+                      const SizedBox(height: 12),
+                      _SummaryRow(overview: overview),
                       const SizedBox(height: 12),
                       _TrendCard(
                         label: '${_range.label}订单趋势',
@@ -724,15 +730,6 @@ class _SummaryRow extends StatelessWidget {
       children: [
         Expanded(
           child: _SummaryCard(
-            title: '营业额',
-            value: Money.formatYuan(overview.totalRevenue),
-            color: const Color(0xFF1677FF),
-            bg: const Color(0xFFE6F4FF),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _SummaryCard(
             title: '有效订单',
             value: '${overview.totalOrders}单',
             color: const Color(0xFFD48806),
@@ -807,6 +804,10 @@ class _HighlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rate = point.collectionRate;
+    final gap = point.collectionGap;
+    final rateLabel = '${(rate * 100).toStringAsFixed(1)}%';
+
     return Card(
       color: AppColors.primary,
       child: Padding(
@@ -818,16 +819,64 @@ class _HighlightCard extends StatelessWidget {
               caption,
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
-            const SizedBox(height: 8),
-            Text(
-              Money.formatYuan(point.revenue),
-              style: const TextStyle(
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _HighlightAmountBlock(
+                    label: '应收',
+                    value: Money.formatYuan(point.receivable),
+                    muted: true,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 44,
+                  color: Colors.white24,
+                ),
+                Expanded(
+                  child: _HighlightAmountBlock(
+                    label: '实收',
+                    value: Money.formatYuan(point.actualRevenue),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: rate,
+                backgroundColor: Colors.white24,
                 color: Colors.white,
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  '实收率 $rateLabel',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const Spacer(),
+                if (gap > 0.009)
+                  Text(
+                    '差额 ${Money.formatYuan(gap)}',
+                    style: const TextStyle(
+                      color: Color(0xFFFFE58F),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else
+                  const Text(
+                    '账实相符',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Row(
               children: [
                 _HighlightMetric(label: '订单', value: '${point.orderCount}'),
@@ -837,6 +886,245 @@ class _HighlightCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HighlightAmountBlock extends StatelessWidget {
+  const _HighlightAmountBlock({
+    required this.label,
+    required this.value,
+    this.muted = false,
+  });
+
+  final String label;
+  final String value;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: muted ? Colors.white60 : Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: muted ? Colors.white : Colors.white,
+              fontSize: muted ? 20 : 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueCompareCard extends StatelessWidget {
+  const _RevenueCompareCard({
+    required this.receivable,
+    required this.actual,
+    required this.gap,
+    required this.rate,
+  });
+
+  final double receivable;
+  final double actual;
+  final double gap;
+  final double rate;
+
+  @override
+  Widget build(BuildContext context) {
+    final rateLabel = '${(rate * 100).toStringAsFixed(1)}%';
+
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFF8FAFC),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '应收 · 实收',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF101828),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: gap > 0.009
+                        ? const Color(0xFFFFF7E6)
+                        : const Color(0xFFF6FFED),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    gap > 0.009 ? '差额 ${Money.formatYuan(gap)}' : '账实相符',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: gap > 0.009
+                          ? const Color(0xFFD48806)
+                          : const Color(0xFF389E0D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _CompareAmountTile(
+                    label: '应收',
+                    value: Money.formatYuan(receivable),
+                    color: const Color(0xFF64748B),
+                    bg: Colors.white,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary.withValues(alpha: 0.5),
+                  ),
+                ),
+                Expanded(
+                  child: _CompareAmountTile(
+                    label: '实收',
+                    value: Money.formatYuan(actual),
+                    color: AppColors.primary,
+                    bg: AppColors.primaryLight,
+                    emphasized: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Text(
+                  '实收率',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary.withValues(alpha: 0.9),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  rateLabel,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 10,
+                value: rate,
+                backgroundColor: const Color(0xFFE2E8F0),
+                color: AppColors.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompareAmountTile extends StatelessWidget {
+  const _CompareAmountTile({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.bg,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final Color bg;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: emphasized
+              ? AppColors.primary.withValues(alpha: 0.2)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: emphasized ? 20 : 18,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

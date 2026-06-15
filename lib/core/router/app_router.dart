@@ -9,9 +9,12 @@ import '../../features/orders/orders_page.dart';
 import '../../features/profile/menu_edit_page.dart';
 import '../../features/profile/menu_manage_page.dart';
 import '../../features/profile/profile_page.dart';
+import '../../features/profile/settlement_detail_page.dart';
+import '../../features/profile/settlement_list_page.dart';
 import '../../features/profile/sales_menu_detail_page.dart';
 import '../../features/profile/sales_stats_page.dart';
 import '../../features/shell/main_shell.dart';
+import '../../features/shell/shell_page_container.dart';
 import '../../features/tables/tables_page.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/stats_range.dart';
@@ -36,9 +39,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => const LoginPage(),
       ),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (context, state, navigationShell) {
           return MainShell(navigationShell: navigationShell);
+        },
+        navigatorContainerBuilder: (context, navigationShell, children) {
+          return ShellPageContainer(
+            navigationShell: navigationShell,
+            children: children,
+          );
         },
         branches: [
           StatefulShellBranch(
@@ -103,6 +112,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/menu-manage',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const MenuManagePage(),
+      ),
+      GoRoute(
+        path: '/settlements',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SettlementListPage(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) {
+              final id = state.pathParameters['id']!;
+              return SettlementDetailPage(settlementId: id);
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: '/menu-edit',

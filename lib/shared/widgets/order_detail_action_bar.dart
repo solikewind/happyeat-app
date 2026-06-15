@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_styles.dart';
-import '../../core/theme/app_theme.dart';
-import '../utils/order_status_display.dart';
 import 'order_action_tile.dart';
-import 'order_advance_button.dart';
 
-/// 订单详情底部操作栏
+/// 订单详情底部操作栏：单行紧凑排列（完成 / 取消 / 打印 / 记账 / 加菜）
 class OrderDetailActionBar extends StatelessWidget {
   const OrderDetailActionBar({
     super.key,
@@ -20,6 +17,9 @@ class OrderDetailActionBar extends StatelessWidget {
     this.removing = false,
     this.removeLabel = '取消',
     this.isDelete = false,
+    this.onSettlement,
+    this.settlementLabel = '记账',
+    this.settlementLoading = false,
   });
 
   final VoidCallback? onAddItems;
@@ -32,56 +32,12 @@ class OrderDetailActionBar extends StatelessWidget {
   final bool removing;
   final String removeLabel;
   final bool isDelete;
-
-  bool get _showAdvance =>
-      onAdvance != null &&
-      OrderStatusDisplay.workbenchAdvanceLabel(status) != null;
+  final VoidCallback? onSettlement;
+  final String settlementLabel;
+  final bool settlementLoading;
 
   @override
   Widget build(BuildContext context) {
-    final secondaries = <Widget>[];
-    if (onAddItems != null) {
-      secondaries.add(
-        Expanded(
-          child: OrderActionTile(
-            icon: Icons.add_circle_outline_rounded,
-            label: '加菜',
-            color: AppColors.primary,
-            backgroundColor: AppColors.primaryLight,
-            onTap: onAddItems!,
-          ),
-        ),
-      );
-    }
-    if (onPrint != null) {
-      if (secondaries.isNotEmpty) secondaries.add(const SizedBox(width: 8));
-      secondaries.add(
-        Expanded(
-          child: OrderActionTile(
-            icon: Icons.print_outlined,
-            label: '打印',
-            loading: printing,
-            onTap: printing ? null : onPrint!,
-          ),
-        ),
-      );
-    }
-    if (onRemove != null) {
-      if (secondaries.isNotEmpty) secondaries.add(const SizedBox(width: 8));
-      secondaries.add(
-        Expanded(
-          child: OrderActionTile(
-            icon: isDelete ? Icons.delete_outline_rounded : Icons.close_rounded,
-            label: removeLabel,
-            color: AppColors.error,
-            backgroundColor: AppColors.error.withValues(alpha: 0.08),
-            loading: removing,
-            onTap: removing ? null : onRemove!,
-          ),
-        ),
-      );
-    }
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -97,21 +53,21 @@ class OrderDetailActionBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_showAdvance) ...[
-                OrderAdvanceButton(
-                  status: status,
-                  loading: advancing,
-                  onPressed: onAdvance,
-                ),
-                if (secondaries.isNotEmpty) const SizedBox(height: 10),
-              ],
-              if (secondaries.isNotEmpty) Row(children: secondaries),
-            ],
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: OrderCompactActionRow(
+            status: status,
+            onAdvance: onAdvance,
+            advancing: advancing,
+            onAddItems: onAddItems,
+            onPrint: onPrint,
+            printing: printing,
+            onRemove: onRemove,
+            removing: removing,
+            removeLabel: removeLabel,
+            isDelete: isDelete,
+            onSettlement: onSettlement,
+            settlementLabel: settlementLabel,
+            settlementLoading: settlementLoading,
           ),
         ),
       ),
