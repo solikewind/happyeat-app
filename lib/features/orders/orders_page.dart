@@ -8,12 +8,14 @@ import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/add_to_order_flow.dart';
+import '../../shared/utils/keyboard.dart';
 import '../../shared/utils/order_advance_flow.dart';
 import '../../shared/utils/order_status_display.dart';
 import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
 import '../../shared/widgets/order_action_tile.dart';
 import '../../shared/widgets/order_cancel_dialog.dart';
+import '../../shared/widgets/order_daily_sequence_chip.dart';
 import '../../shared/widgets/order_status_chip.dart';
 import '../../shared/widgets/order_swipe_actions.dart';
 import '../../shared/widgets/order_swipe_group.dart';
@@ -65,6 +67,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   Future<void> _advanceStatus(OrderModel order) async {
     if (_updatingOrderId != null) return;
+    dismissKeyboard();
 
     setState(() => _updatingOrderId = order.id);
     try {
@@ -81,16 +84,17 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   Future<void> _printKitchen(OrderModel order) async {
     if (_printingOrderId != null) return;
+    dismissKeyboard();
     setState(() => _printingOrderId = order.id);
     try {
       await ref.read(orderRepositoryProvider).printOrderKitchen(order.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(
-        content: Text('已提交厨房打印'),
-        duration: Duration(milliseconds: 1200),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已提交厨房打印'),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -110,6 +114,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   Future<void> _removeOrder(OrderModel order) async {
     if (_cancellingOrderId != null) return;
     if (!OrderStatusDisplay.canRemove(order.status)) return;
+    dismissKeyboard();
     final isDelete = OrderStatusDisplay.canDelete(order.status);
     if (!await confirmRemoveOrder(context, isDelete: isDelete)) return;
 
@@ -141,144 +146,151 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       tabIndex: ShellTab.orders,
       onReselect: () => _load(silent: true),
       child: Scaffold(
-      appBar: AppBar(title: const Text('订单')),
-      body: Column(
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: '全部',
-                  selected: _statusFilter == null,
-                  onTap: () {
-                    setState(() => _statusFilter = null);
-                    _load();
-                  },
-                ),
-                _FilterChip(
-                  label: '待支付',
-                  selected: _statusFilter == 'created',
-                  onTap: () {
-                    setState(() => _statusFilter = 'created');
-                    _load();
-                  },
-                ),
-                _FilterChip(
-                  label: '已支付',
-                  selected: _statusFilter == 'paid',
-                  onTap: () {
-                    setState(() => _statusFilter = 'paid');
-                    _load();
-                  },
-                ),
-                _FilterChip(
-                  label: '制作中',
-                  selected: _statusFilter == 'preparing',
-                  onTap: () {
-                    setState(() => _statusFilter = 'preparing');
-                    _load();
-                  },
-                ),
-                _FilterChip(
-                  label: '已完成',
-                  selected: _statusFilter == 'completed',
-                  onTap: () {
-                    setState(() => _statusFilter = 'completed');
-                    _load();
-                  },
-                ),
-                _FilterChip(
-                  label: '已取消',
-                  selected: _statusFilter == 'cancelled',
-                  onTap: () {
-                    setState(() => _statusFilter = 'cancelled');
-                    _load();
-                  },
-                ),
-              ],
+        appBar: AppBar(title: const Text('订单')),
+        body: Column(
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: '全部',
+                    selected: _statusFilter == null,
+                    onTap: () {
+                      setState(() => _statusFilter = null);
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
+                    label: '待支付',
+                    selected: _statusFilter == 'created',
+                    onTap: () {
+                      setState(() => _statusFilter = 'created');
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
+                    label: '已支付',
+                    selected: _statusFilter == 'paid',
+                    onTap: () {
+                      setState(() => _statusFilter = 'paid');
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
+                    label: '制作中',
+                    selected: _statusFilter == 'preparing',
+                    onTap: () {
+                      setState(() => _statusFilter = 'preparing');
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
+                    label: '已完成',
+                    selected: _statusFilter == 'completed',
+                    onTap: () {
+                      setState(() => _statusFilter = 'completed');
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
+                    label: '已取消',
+                    selected: _statusFilter == 'cancelled',
+                    onTap: () {
+                      setState(() => _statusFilter = 'cancelled');
+                      _load();
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.45,
-                          child: LoadErrorPanel(
-                            message: _error!,
-                            onRetry: _load,
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.45,
+                            child: LoadErrorPanel(
+                              message: _error!,
+                              onRetry: _load,
+                            ),
+                          ),
+                        ],
+                      )
+                    : _orders.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(
+                            height: 200,
+                            child: Center(child: Text('暂无订单')),
+                          ),
+                        ],
+                      )
+                    : OrderSwipeScope(
+                        group: _swipeGroup,
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollStartNotification) {
+                              _swipeGroup.closeCurrent();
+                            }
+                            return false;
+                          },
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _orders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final order = _orders[index];
+                              return _OrderCard(
+                                order: order,
+                                advancing: _updatingOrderId == order.id,
+                                printing: _printingOrderId == order.id,
+                                cancelling: _cancellingOrderId == order.id,
+                                onPrint: _canPrintKitchen(order)
+                                    ? () => _printKitchen(order)
+                                    : null,
+                                onAdvance:
+                                    OrderStatusDisplay.workbenchAdvanceTarget(
+                                          order.status,
+                                        ) !=
+                                        null
+                                    ? () => _advanceStatus(order)
+                                    : null,
+                                onAddItems:
+                                    OrderStatusDisplay.canAddItems(order.status)
+                                    ? () => startAddToOrderFlow(
+                                        context,
+                                        ref,
+                                        order: order,
+                                      )
+                                    : null,
+                                onRemove:
+                                    OrderStatusDisplay.canRemove(order.status)
+                                    ? () => _removeOrder(order)
+                                    : null,
+                                onTap: () async {
+                                  dismissKeyboard();
+                                  await context.push('/orders/${order.id}');
+                                  dismissKeyboard();
+                                },
+                              );
+                            },
                           ),
                         ),
-                      ],
-                    )
-                  : _orders.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
-                        SizedBox(
-                          height: 200,
-                          child: Center(child: Text('暂无订单')),
-                        ),
-                      ],
-                    )
-                  : OrderSwipeScope(
-                      group: _swipeGroup,
-                      child: NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollStartNotification) {
-                          _swipeGroup.closeCurrent();
-                        }
-                        return false;
-                      },
-                      child: ListView.separated(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _orders.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final order = _orders[index];
-                        return _OrderCard(
-                          order: order,
-                          advancing: _updatingOrderId == order.id,
-                          printing: _printingOrderId == order.id,
-                          cancelling: _cancellingOrderId == order.id,
-                          onPrint: _canPrintKitchen(order)
-                              ? () => _printKitchen(order)
-                              : null,
-                          onAdvance:
-                              OrderStatusDisplay.workbenchAdvanceTarget(
-                                    order.status,
-                                  ) !=
-                                  null
-                              ? () => _advanceStatus(order)
-                              : null,
-                          onAddItems: OrderStatusDisplay.canAddItems(order.status)
-                              ? () => startAddToOrderFlow(
-                                  context,
-                                  ref,
-                                  order: order,
-                                )
-                              : null,
-                          onRemove: OrderStatusDisplay.canRemove(order.status)
-                              ? () => _removeOrder(order)
-                              : null,
-                          onTap: () => context.push('/orders/${order.id}'),
-                        );
-                      },
-                    ),
-                    ),
-                    ),
+                      ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -343,8 +355,7 @@ class _OrderCard extends StatelessWidget {
         ? '$summaryItems 等$itemCount件'
         : summaryItems;
     final isActive = OrderStatusDisplay.isActive(order.status);
-    final showSwipeActions = isActive &&
-        (onPrint != null || onRemove != null);
+    final showSwipeActions = isActive && (onPrint != null || onRemove != null);
 
     final card = Card(
       margin: EdgeInsets.zero,
@@ -391,6 +402,11 @@ class _OrderCard extends StatelessWidget {
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 OrderStatusChip(status: order.status),
+                                if (order.dailySequence != null &&
+                                    order.dailySequence! > 0)
+                                  OrderDailySequenceChip(
+                                    sequence: order.dailySequence!,
+                                  ),
                                 if (order.createdAtLabel != null)
                                   Text(
                                     order.createdAtLabel!,
@@ -412,28 +428,6 @@ class _OrderCard extends StatelessWidget {
                                   fontSize: 13,
                                   height: 1.35,
                                 ),
-                              ),
-                            ],
-                            if (showSwipeActions) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.swipe_left_alt_rounded,
-                                    size: 14,
-                                    color: AppColors.textSecondary
-                                        .withValues(alpha: 0.7),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '左滑操作',
-                                    style: TextStyle(
-                                      color: AppColors.textSecondary
-                                          .withValues(alpha: 0.85),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ],

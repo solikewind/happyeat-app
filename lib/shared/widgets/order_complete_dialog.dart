@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
+import '../utils/keyboard.dart';
 
 /// 完成/出单前确认实收金额；取消返回 null。
 Future<double?> confirmCompleteOrder(
@@ -39,16 +40,23 @@ Future<double?> confirmCompleteOrder(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
+          onPressed: () {
+            dismissKeyboard();
+            Navigator.pop(ctx, false);
+          },
           child: const Text('取消'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(ctx, true),
+          onPressed: () {
+            dismissKeyboard();
+            Navigator.pop(ctx, true);
+          },
           child: Text('确认$actionLabel'),
         ),
       ],
     ),
   );
+  dismissKeyboard();
 
   if (confirmed != true) {
     amountCtrl.dispose();
@@ -59,9 +67,9 @@ Future<double?> confirmCompleteOrder(
   amountCtrl.dispose();
   if (actual == null || actual < 0) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效实收金额')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入有效实收金额')));
     }
     return null;
   }

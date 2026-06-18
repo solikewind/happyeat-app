@@ -6,6 +6,7 @@ import '../../data/models/models.dart';
 import '../providers/app_providers.dart';
 import '../widgets/brief_snack_bar.dart';
 import '../widgets/order_complete_dialog.dart';
+import 'keyboard.dart';
 import 'order_status_display.dart';
 
 /// 推进订单状态；目标为 completed 时先确认实收金额。
@@ -14,6 +15,7 @@ Future<bool> advanceOrderWithConfirm({
   required WidgetRef ref,
   required OrderModel order,
 }) async {
+  dismissKeyboard();
   final next = OrderStatusDisplay.workbenchAdvanceTarget(order.status);
   if (next == null) return false;
 
@@ -30,11 +32,10 @@ Future<bool> advanceOrderWithConfirm({
   }
 
   try {
-    await ref.read(orderRepositoryProvider).updateOrderStatus(
-          order.id,
-          next,
-          actualYuan: actualYuan,
-        );
+    await ref
+        .read(orderRepositoryProvider)
+        .updateOrderStatus(order.id, next, actualYuan: actualYuan);
+    dismissKeyboard();
     if (context.mounted) {
       showBriefSnackBar(
         context,
@@ -44,9 +45,9 @@ Future<bool> advanceOrderWithConfirm({
     return true;
   } on ApiException catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     }
     return false;
   }

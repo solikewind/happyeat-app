@@ -8,12 +8,14 @@ import '../../core/utils/money.dart';
 import '../../data/models/models.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/add_to_order_flow.dart';
+import '../../shared/utils/keyboard.dart';
 import '../../shared/utils/order_advance_flow.dart';
 import '../../shared/utils/order_status_display.dart';
 import '../../shared/widgets/brief_snack_bar.dart';
 import '../../shared/widgets/load_error_panel.dart';
 import '../../shared/widgets/order_cancel_dialog.dart';
 import '../../shared/widgets/order_detail_action_bar.dart';
+import '../../shared/widgets/order_daily_sequence_chip.dart';
 import '../../shared/widgets/order_status_chip.dart';
 import '../../shared/widgets/order_table_headline.dart';
 import '../profile/add_settlement_orders_sheet.dart';
@@ -63,6 +65,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   Future<void> _advanceStatus(OrderModel order) async {
     if (_updatingStatus) return;
+    dismissKeyboard();
 
     setState(() => _updatingStatus = true);
     try {
@@ -79,16 +82,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   Future<void> _printKitchen(OrderModel order) async {
     if (_printing) return;
+    dismissKeyboard();
     setState(() => _printing = true);
     try {
       await ref.read(orderRepositoryProvider).printOrderKitchen(order.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(
-        content: Text('已提交厨房打印'),
-        duration: Duration(milliseconds: 1200),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已提交厨房打印'),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -109,6 +113,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         !OrderStatusDisplay.canAddItems(order.status)) {
       return;
     }
+    dismissKeyboard();
     final item = order.items[index];
     final isLast = order.items.length == 1;
     final confirmed = await showDialog<bool>(
@@ -148,11 +153,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       final menus = await ref.read(menuRepositoryProvider).listMenus();
       final menuNameToId = {for (final m in menus) m.name: m.id};
       final remaining = [...order.items]..removeAt(index);
-      await ref.read(orderRepositoryProvider).replaceOrderItems(
-        orderId: order.id,
-        items: remaining,
-        menuNameToId: menuNameToId,
-      );
+      await ref
+          .read(orderRepositoryProvider)
+          .replaceOrderItems(
+            orderId: order.id,
+            items: remaining,
+            menuNameToId: menuNameToId,
+          );
       if (!mounted) return;
       showBriefSnackBar(context, '已删除 ${item.menuName}');
       await _load(silent: true);
@@ -169,6 +176,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   Future<void> _removeOrder(OrderModel order) async {
     if (_cancelling || !OrderStatusDisplay.canRemove(order.status)) return;
+    dismissKeyboard();
     final isDelete = OrderStatusDisplay.canDelete(order.status);
     if (!await confirmRemoveOrder(context, isDelete: isDelete)) return;
 
@@ -195,6 +203,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   Future<void> _handleSettlement(OrderModel order) async {
+    dismissKeyboard();
     final settlementId = order.settlementId;
     if (settlementId != null && settlementId.isNotEmpty) {
       await context.push('/settlements/$settlementId');
@@ -204,6 +213,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     if (order.status == 'cancelled') return;
     final changed = await showAddOrderToSettlementSheet(context, order: order);
     if (changed == true && mounted) await _load(silent: true);
+  }
+
+  @override
+  void dispose() {
+    dismissKeyboard();
+    super.dispose();
   }
 
   @override
@@ -219,87 +234,90 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final showRemove =
         order != null && OrderStatusDisplay.canRemove(order.status);
     final settlementId = order?.settlementId;
-    final hasSettlement =
-        settlementId != null && settlementId.isNotEmpty;
-    final showSettlement =
-        order != null && order.status != 'cancelled';
-    final showBottomBar = showAddItems ||
+    final hasSettlement = settlementId != null && settlementId.isNotEmpty;
+    final showSettlement = order != null && order.status != 'cancelled';
+    final showBottomBar =
+        showAddItems ||
         showAdvance ||
         showPrint ||
         showRemove ||
         showSettlement;
-    return Scaffold(
-      appBar: AppBar(title: const Text('订单详情')),
-      bottomNavigationBar: showBottomBar
-          ? OrderDetailActionBar(
-              status: order!.status,
-              onAddItems: showAddItems
-                  ? () => startAddToOrderFlow(context, ref, order: order)
-                  : null,
-              onPrint: showPrint ? () => _printKitchen(order) : null,
-              printing: _printing,
-              onAdvance: showAdvance ? () => _advanceStatus(order) : null,
-              advancing: _updatingStatus,
-              onRemove: showRemove ? () => _removeOrder(order) : null,
-              removing: _cancelling,
-              removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
-              isDelete: OrderStatusDisplay.canDelete(order.status),
-              onSettlement:
-                  showSettlement ? () => _handleSettlement(order) : null,
-              settlementLabel: hasSettlement ? '结账单' : '记账',
-            )
-          : null,
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? LoadErrorPanel(message: _error!, onRetry: _load)
-          : order == null
-          ? const Center(child: Text('订单不存在'))
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _OrderSummaryCard(order: order),
-                  if (hasSettlement) ...[
-                    const SizedBox(height: 12),
-                    Card(
-                      child: ListTile(
-                        leading: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+    return PopScope(
+      onPopInvokedWithResult: (_, __) => dismissKeyboard(),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('订单详情')),
+        bottomNavigationBar: showBottomBar
+            ? OrderDetailActionBar(
+                status: order!.status,
+                onAddItems: showAddItems
+                    ? () => startAddToOrderFlow(context, ref, order: order)
+                    : null,
+                onPrint: showPrint ? () => _printKitchen(order) : null,
+                printing: _printing,
+                onAdvance: showAdvance ? () => _advanceStatus(order) : null,
+                advancing: _updatingStatus,
+                onRemove: showRemove ? () => _removeOrder(order) : null,
+                removing: _cancelling,
+                removeLabel: OrderStatusDisplay.removeButtonLabel(order.status),
+                isDelete: OrderStatusDisplay.canDelete(order.status),
+                onSettlement: showSettlement
+                    ? () => _handleSettlement(order)
+                    : null,
+                settlementLabel: hasSettlement ? '结账单' : '记账',
+              )
+            : null,
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? LoadErrorPanel(message: _error!, onRetry: _load)
+            : order == null
+            ? const Center(child: Text('订单不存在'))
+            : RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _OrderSummaryCard(order: order),
+                    if (hasSettlement) ...[
+                      const SizedBox(height: 12),
+                      Card(
+                        child: ListTile(
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.warning.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.receipt_long_outlined,
+                              color: AppColors.warning,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.receipt_long_outlined,
-                            color: AppColors.warning,
+                          title: const Text(
+                            '已加入结账单',
+                            style: TextStyle(fontWeight: FontWeight.w600),
                           ),
+                          subtitle: Text('结账单 #$settlementId'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _handleSettlement(order),
                         ),
-                        title: const Text(
-                          '已加入结账单',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text('结账单 #$settlementId'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _handleSettlement(order),
                       ),
+                    ],
+                    const SizedBox(height: 12),
+                    _OrderItemsSection(
+                      order: order,
+                      canEditItems: canEditItems,
+                      removingItemIndex: _removingItemIndex,
+                      onRemoveItem: canEditItems
+                          ? (index) => _removeItemAt(order, index)
+                          : null,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  _OrderItemsSection(
-                    order: order,
-                    canEditItems: canEditItems,
-                    removingItemIndex: _removingItemIndex,
-                    onRemoveItem: canEditItems
-                        ? (index) => _removeItemAt(order, index)
-                        : null,
-                  ),
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -321,7 +339,9 @@ class _OrderSummaryCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: OrderTableHeadline(order: order, compact: true)),
+                Expanded(
+                  child: OrderTableHeadline(order: order, compact: true),
+                ),
                 const SizedBox(width: 12),
                 Text(
                   Money.formatYuan(order.totalAmount),
@@ -341,6 +361,8 @@ class _OrderSummaryCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 OrderStatusChip(status: order.status),
+                if (order.dailySequence != null && order.dailySequence! > 0)
+                  OrderDailySequenceChip(sequence: order.dailySequence!),
                 if (order.createdAtLabel != null)
                   Text(
                     '下单 ${order.createdAtLabel}',
@@ -460,7 +482,8 @@ class _OrderItemsSection extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < order.items.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  if (i > 0)
+                    const Divider(height: 1, indent: 14, endIndent: 14),
                   _OrderItemRow(
                     item: order.items[i],
                     onRemove: onRemoveItem != null

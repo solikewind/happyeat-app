@@ -9,6 +9,7 @@ import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/sales_stats.dart';
 import '../../shared/utils/stats_range.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/menu_sales_group_list.dart';
 
 class SalesStatsPage extends ConsumerStatefulWidget {
   const SalesStatsPage({super.key});
@@ -70,10 +71,12 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
       _error = null;
     });
     try {
-      final overview = await ref.read(statsRepositoryProvider).loadSalesOverview(
-        startDate: _range.startDate,
-        endDate: _range.endDate,
-      );
+      final overview = await ref
+          .read(statsRepositoryProvider)
+          .loadSalesOverview(
+            startDate: _range.startDate,
+            endDate: _range.endDate,
+          );
       if (mounted) setState(() => _overview = overview);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -135,7 +138,8 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
                                 StatsRange.formatDate(start),
                               ),
                               selected: pickingStart,
-                              onTap: () => setSheetState(() => pickingStart = true),
+                              onTap: () =>
+                                  setSheetState(() => pickingStart = true),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -146,7 +150,8 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
                                 StatsRange.formatDate(end),
                               ),
                               selected: !pickingStart,
-                              onTap: () => setSheetState(() => pickingStart = false),
+                              onTap: () =>
+                                  setSheetState(() => pickingStart = false),
                             ),
                           ),
                         ],
@@ -297,12 +302,12 @@ class _SalesStatsPageState extends ConsumerState<SalesStatsPage> {
                             '菜品销量明细',
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text('${overview.menuBreakdown.length} 种菜品'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => context.push(
-                            '/sales-stats/menus',
-                            extra: _range,
+                          subtitle: Text(
+                            '${groupMenuSalesRows(overview.menuBreakdown).length} 种菜品',
                           ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () =>
+                              context.push('/sales-stats/menus', extra: _range),
                         ),
                       ),
                     ],
@@ -391,7 +396,9 @@ class _RangeFilterBar extends StatelessWidget {
                   Icon(
                     Icons.date_range_outlined,
                     size: 18,
-                    color: isCustom ? AppColors.primary : AppColors.textSecondary,
+                    color: isCustom
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -426,14 +433,16 @@ class _RangeFilterBar extends StatelessWidget {
                                 ),
                               ),
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 child: Text(
                                   '至',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.textSecondary
-                                        .withValues(alpha: 0.8),
+                                    color: AppColors.textSecondary.withValues(
+                                      alpha: 0.8,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -576,10 +585,7 @@ class _DatePickChip extends StatelessWidget {
 }
 
 class _MenuSalesSection extends StatelessWidget {
-  const _MenuSalesSection({
-    required this.rows,
-    this.showHeader = false,
-  });
+  const _MenuSalesSection({required this.rows, this.showHeader = false});
 
   final List<MenuSalesRow> rows;
   final bool showHeader;
@@ -588,16 +594,17 @@ class _MenuSalesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalQty = rows.fold<int>(0, (sum, e) => sum + e.quantity);
     final totalAmount = rows.fold<double>(0, (sum, e) => sum + e.amount);
+    final groupCount = groupMenuSalesRows(rows).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showHeader)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              '菜品销量明细',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              '菜品销量明细 · $groupCount 种',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
           ),
         if (rows.isEmpty)
@@ -628,57 +635,7 @@ class _MenuSalesSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...rows.asMap().entries.map((entry) {
-            final index = entry.key;
-            final row = entry.value;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.primaryLight,
-                  child: Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                title: Text(
-                  row.menuName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                subtitle: row.displaySpec.isEmpty ? null : Text(row.displaySpec),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '×${row.quantity}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Text(
-                      Money.formatYuan(row.amount),
-                      style: const TextStyle(
-                        color: AppColors.error,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
+          MenuSalesGroupList(rows: rows, dense: true),
         ],
       ],
     );
@@ -775,7 +732,10 @@ class _SummaryCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.85)),
+              style: TextStyle(
+                fontSize: 12,
+                color: color.withValues(alpha: 0.85),
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -794,10 +754,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _HighlightCard extends StatelessWidget {
-  const _HighlightCard({
-    required this.point,
-    required this.caption,
-  });
+  const _HighlightCard({required this.point, required this.caption});
 
   final DailySalesPoint point;
   final String caption;
@@ -829,11 +786,7 @@ class _HighlightCard extends StatelessWidget {
                     muted: true,
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 44,
-                  color: Colors.white24,
-                ),
+                Container(width: 1, height: 44, color: Colors.white24),
                 Expanded(
                   child: _HighlightAmountBlock(
                     label: '实收',
@@ -987,8 +940,10 @@ class _RevenueCompareCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: gap > 0.009
                         ? const Color(0xFFFFF7E6)

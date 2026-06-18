@@ -192,7 +192,6 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
                 onHorizontalDragEnd: _onHorizontalDragEnd,
                 onHorizontalDragCancel: _onHorizontalDragCancel,
                 child: Transform.translate(
-                  transformHitTests: false,
                   offset: Offset(-_offset, 0),
                   child: DecoratedBox(
                     decoration: BoxDecoration(

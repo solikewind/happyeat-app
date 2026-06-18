@@ -8,6 +8,7 @@ import '../../shared/providers/app_providers.dart';
 import '../../shared/utils/sales_stats.dart';
 import '../../shared/utils/stats_range.dart';
 import '../../shared/widgets/load_error_panel.dart';
+import '../../shared/widgets/menu_sales_group_list.dart';
 
 class SalesMenuDetailPage extends ConsumerStatefulWidget {
   const SalesMenuDetailPage({super.key, required this.range});
@@ -36,10 +37,12 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
       _error = null;
     });
     try {
-      final overview = await ref.read(statsRepositoryProvider).loadSalesOverview(
-        startDate: widget.range.startDate,
-        endDate: widget.range.endDate,
-      );
+      final overview = await ref
+          .read(statsRepositoryProvider)
+          .loadSalesOverview(
+            startDate: widget.range.startDate,
+            endDate: widget.range.endDate,
+          );
       if (mounted) setState(() => _rows = overview.menuBreakdown);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -52,6 +55,7 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
   Widget build(BuildContext context) {
     final totalQty = _rows.fold<int>(0, (sum, e) => sum + e.quantity);
     final totalAmount = _rows.fold<double>(0, (sum, e) => sum + e.amount);
+    final groupCount = groupMenuSalesRows(_rows).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('菜品销量明细')),
@@ -113,53 +117,16 @@ class _SalesMenuDetailPageState extends ConsumerState<SalesMenuDetailPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '共 $groupCount 种菜品',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  ..._rows.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final row = entry.value;
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primaryLight,
-                          child: Text(
-                            '${index + 1}',
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          row.menuName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: row.displaySpec.isEmpty
-                            ? null
-                            : Text(row.displaySpec),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '×${row.quantity}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Text(
-                              Money.formatYuan(row.amount),
-                              style: const TextStyle(
-                                color: AppColors.error,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
+                  MenuSalesGroupList(rows: _rows),
                 ],
               ),
             ),
@@ -185,10 +152,7 @@ class _TotalBlock extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(

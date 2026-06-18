@@ -12,10 +12,13 @@ class DailySalesPoint {
   final String key;
   final String label;
   final int orderCount;
+
   /// 实收（与 revenue 一致，兼容旧字段）
   final double revenue;
+
   /// 应收合计
   final double receivable;
+
   /// 实收合计
   final double actualRevenue;
   final int itemCount;
@@ -29,12 +32,14 @@ class DailySalesPoint {
 
 class MenuSalesRow {
   const MenuSalesRow({
+    this.menuId,
     required this.menuName,
     this.specInfo,
     required this.quantity,
     required this.amount,
   });
 
+  final String? menuId;
   final String menuName;
   final String? specInfo;
   final int quantity;
@@ -45,6 +50,57 @@ class MenuSalesRow {
     if (spec == null || spec.isEmpty) return '';
     return spec;
   }
+
+  String get groupKey {
+    final id = menuId?.trim();
+    if (id != null && id.isNotEmpty) return 'id:$id';
+    return 'name:$menuName';
+  }
+}
+
+class MenuSalesGroup {
+  const MenuSalesGroup({
+    required this.key,
+    required this.menuName,
+    required this.variants,
+  });
+
+  final String key;
+  final String menuName;
+  final List<MenuSalesRow> variants;
+
+  int get quantity => variants.fold<int>(0, (sum, row) => sum + row.quantity);
+
+  double get amount => variants.fold<double>(0, (sum, row) => sum + row.amount);
+
+  bool get canExpand =>
+      variants.length > 1 || variants.any((row) => row.displaySpec.isNotEmpty);
+}
+
+List<MenuSalesGroup> groupMenuSalesRows(List<MenuSalesRow> rows) {
+  if (rows.isEmpty) return const [];
+
+  final grouped = <String, List<MenuSalesRow>>{};
+  for (final row in rows) {
+    grouped.putIfAbsent(row.groupKey, () => []).add(row);
+  }
+
+  final groups = grouped.entries
+      .map(
+        (entry) => MenuSalesGroup(
+          key: entry.key,
+          menuName: entry.value.first.menuName,
+          variants: List<MenuSalesRow>.from(entry.value),
+        ),
+      )
+      .toList();
+
+  groups.sort((a, b) {
+    final qtyDiff = b.quantity.compareTo(a.quantity);
+    if (qtyDiff != 0) return qtyDiff;
+    return b.amount.compareTo(a.amount);
+  });
+  return groups;
 }
 
 class SalesOverview {
@@ -88,9 +144,7 @@ abstract final class SalesStats {
     final dailyPoints = dailyRaw is List
         ? dailyRaw
               .whereType<Map>()
-              .map(
-                (e) => _dailyPointFromJson(Map<String, dynamic>.from(e)),
-              )
+              .map((e) => _dailyPointFromJson(Map<String, dynamic>.from(e)))
               .toList()
         : <DailySalesPoint>[];
 
@@ -105,7 +159,8 @@ abstract final class SalesStats {
             'date': _todayKey(),
             'order_count': summaryMap['order_count'] ?? 0,
             'revenue': summaryMap['revenue'] ?? 0,
-            'receivable': summaryMap['receivable'] ?? summaryMap['revenue'] ?? 0,
+            'receivable':
+                summaryMap['receivable'] ?? summaryMap['revenue'] ?? 0,
             'actual_revenue':
                 summaryMap['actual_revenue'] ?? summaryMap['revenue'] ?? 0,
             'item_count': summaryMap['item_count'] ?? 0,
@@ -158,7 +213,12 @@ abstract final class SalesStats {
 
   static MenuSalesRow _menuRowFromJson(Map<String, dynamic> json) {
     final spec = (json['spec_info'] as String?)?.trim();
+    final menuIdRaw = json['menu_id'];
+    final menuId = menuIdRaw == null || '$menuIdRaw'.trim().isEmpty
+        ? null
+        : '$menuIdRaw'.trim();
     return MenuSalesRow(
+      menuId: menuId,
       menuName: (json['menu_name'] as String?) ?? '',
       specInfo: spec == null || spec.isEmpty ? null : spec,
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,

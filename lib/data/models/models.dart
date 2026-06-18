@@ -181,6 +181,7 @@ class OrderModel {
     this.tableCategory,
     this.remark,
     this.settlementId,
+    this.dailySequence,
     this.items = const [],
     this.createdAt,
   });
@@ -196,6 +197,7 @@ class OrderModel {
   final String? tableCategory;
   final String? remark;
   final String? settlementId;
+  final int? dailySequence;
   final List<OrderLineItem> items;
   final String? createdAt;
 
@@ -231,6 +233,7 @@ class OrderModel {
       settlementId: json['settlement_id'] != null
           ? '${json['settlement_id']}'
           : null,
+      dailySequence: (json['daily_sequence'] as num?)?.toInt(),
       items: itemsRaw is List
           ? itemsRaw
                 .map((e) => OrderLineItem.fromJson(e as Map<String, dynamic>))
