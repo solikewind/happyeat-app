@@ -4,6 +4,10 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../utils/sales_stats.dart';
 
+/// 右侧数量/金额列固定宽度，保证有规格展开行与无规格行对齐。
+const _kMetricsWidth = 72.0;
+const _kExpandSlotWidth = 24.0;
+
 class MenuSalesGroupList extends StatefulWidget {
   const MenuSalesGroupList({super.key, required this.rows, this.dense = false});
 
@@ -64,7 +68,6 @@ class _MenuSalesGroupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final avatarRadius = dense ? 16.0 : 18.0;
     final titleSize = dense ? 14.0 : 15.0;
-    final qtySize = dense ? 15.0 : 16.0;
 
     return Card(
       margin: EdgeInsets.only(bottom: dense ? 8 : 10),
@@ -105,35 +108,12 @@ class _MenuSalesGroupTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '×${group.quantity}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: qtySize,
-                        ),
-                      ),
-                      Text(
-                        Money.formatYuan(group.amount),
-                        style: TextStyle(
-                          color: AppColors.error,
-                          fontSize: dense ? 11 : 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  _MenuSalesMetrics(
+                    quantity: group.quantity,
+                    amount: group.amount,
+                    dense: dense,
                   ),
-                  if (group.canExpand) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
+                  _ExpandSlot(showIcon: group.canExpand, expanded: expanded),
                 ],
               ),
             ),
@@ -168,7 +148,7 @@ class _MenuSalesVariantRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(56, dense ? 8 : 10, 12, dense ? 8 : 10),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Text(
@@ -180,29 +160,77 @@ class _MenuSalesVariantRow extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '×${row.quantity}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                Money.formatYuan(row.amount),
-                style: const TextStyle(
-                  color: AppColors.error,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          _MenuSalesMetrics(
+            quantity: row.quantity,
+            amount: row.amount,
+            dense: dense,
+          ),
+          const _ExpandSlot(showIcon: false, expanded: false),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuSalesMetrics extends StatelessWidget {
+  const _MenuSalesMetrics({
+    required this.quantity,
+    required this.amount,
+    required this.dense,
+  });
+
+  final int quantity;
+  final double amount;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _kMetricsWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            '×$quantity',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: dense ? 15 : 16,
+            ),
+          ),
+          Text(
+            Money.formatYuan(amount),
+            style: TextStyle(
+              color: AppColors.error,
+              fontSize: dense ? 11 : 12,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.right,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ExpandSlot extends StatelessWidget {
+  const _ExpandSlot({required this.showIcon, required this.expanded});
+
+  final bool showIcon;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _kExpandSlotWidth,
+      child: showIcon
+          ? Icon(
+              expanded
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textSecondary,
+              size: 24,
+            )
+          : null,
     );
   }
 }

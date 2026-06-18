@@ -146,7 +146,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         await ref.read(orderRepositoryProvider).cancelOrder(order.id);
         if (!mounted) return;
         showBriefSnackBar(context, OrderStatusDisplay.cancelSuccessMessage);
-        context.pop();
+        context.pop(true);
         return;
       }
 
@@ -190,7 +190,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             ? OrderStatusDisplay.deleteSuccessMessage
             : OrderStatusDisplay.cancelSuccessMessage,
       );
-      context.pop();
+      context.pop(true);
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

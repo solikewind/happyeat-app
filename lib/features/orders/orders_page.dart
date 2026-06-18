@@ -128,6 +128,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             ? OrderStatusDisplay.deleteSuccessMessage
             : OrderStatusDisplay.cancelSuccessMessage,
       );
+      _removeOrderLocally(order);
       await _load(silent: true);
     } on ApiException catch (e) {
       if (mounted) {
@@ -138,6 +139,39 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     } finally {
       if (mounted) setState(() => _cancellingOrderId = null);
     }
+  }
+
+  /// 取消/删除成功后先本地更新列表，避免等待接口返回前列表无变化。
+  void _removeOrderLocally(OrderModel order) {
+    final filter = _statusFilter?.trim().toLowerCase();
+    setState(() {
+      if (filter == null || filter.isEmpty) {
+        _orders = [
+          for (final o in _orders)
+            if (o.id == order.id)
+              OrderModel(
+                id: o.id,
+                orderNo: o.orderNo,
+                orderType: o.orderType,
+                status: 'cancelled',
+                tableId: o.tableId,
+                tableCode: o.tableCode,
+                tableCategory: o.tableCategory,
+                totalAmount: o.totalAmount,
+                actualAmount: o.actualAmount,
+                remark: o.remark,
+                items: o.items,
+                createdAt: o.createdAt,
+                dailySequence: o.dailySequence,
+                settlementId: o.settlementId,
+              )
+            else
+              o,
+        ];
+      } else {
+        _orders = _orders.where((o) => o.id != order.id).toList();
+      }
+    });
   }
 
   @override
@@ -171,6 +205,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                     },
                   ),
                   _FilterChip(
+                    label: '已完成',
+                    selected: _statusFilter == 'completed',
+                    onTap: () {
+                      setState(() => _statusFilter = 'completed');
+                      _load();
+                    },
+                  ),
+                  _FilterChip(
                     label: '已支付',
                     selected: _statusFilter == 'paid',
                     onTap: () {
@@ -183,14 +225,6 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                     selected: _statusFilter == 'preparing',
                     onTap: () {
                       setState(() => _statusFilter = 'preparing');
-                      _load();
-                    },
-                  ),
-                  _FilterChip(
-                    label: '已完成',
-                    selected: _statusFilter == 'completed',
-                    onTap: () {
-                      setState(() => _statusFilter = 'completed');
                       _load();
                     },
                   ),
@@ -280,6 +314,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                                   dismissKeyboard();
                                   await context.push('/orders/${order.id}');
                                   dismissKeyboard();
+                                  if (mounted) await _load(silent: true);
                                 },
                               );
                             },
@@ -338,22 +373,17 @@ class _OrderCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onAddItems;
   final VoidCallback? onAdvance;
-  final VoidCallback? onPrint;
-  final VoidCallback? onRemove;
+  final Future<void> Function()? onPrint;
+  final Future<void> Function()? onRemove;
   final bool advancing;
   final bool printing;
   final bool cancelling;
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = order.items.fold<int>(0, (sum, e) => sum + e.quantity);
-    final summaryItems = order.items
-        .take(2)
+    final summary = order.items
         .map((e) => '${e.menuName}×${e.quantity}')
         .join('、');
-    final summary = order.items.length > 2
-        ? '$summaryItems 等$itemCount件'
-        : summaryItems;
     final isActive = OrderStatusDisplay.isActive(order.status);
     final showSwipeActions = isActive && (onPrint != null || onRemove != null);
 
@@ -421,12 +451,10 @@ class _OrderCard extends StatelessWidget {
                               const SizedBox(height: 6),
                               Text(
                                 summary,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 13,
-                                  height: 1.35,
+                                  height: 1.4,
                                 ),
                               ),
                             ],

@@ -20,9 +20,9 @@ class OrderSwipeActions extends StatefulWidget {
 
   final Widget child;
   final OrderSwipeGroup? group;
-  final VoidCallback? onPrint;
+  final Future<void> Function()? onPrint;
   final bool printing;
-  final VoidCallback? onRemove;
+  final Future<void> Function()? onRemove;
   final bool removing;
   final String removeLabel;
 
@@ -115,10 +115,10 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
     _snapTo(_offset > _actionWidth * _openThreshold);
   }
 
-  void _runAction(VoidCallback? action) {
+  Future<void> _runAction(Future<void> Function()? action) async {
     if (action == null) return;
-    action();
-    _snapTo(false);
+    await _snapTo(false);
+    await action();
   }
 
   Widget _buildActions({required bool interactive}) {
@@ -136,7 +136,9 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
                 loading: widget.printing,
                 onTap: widget.printing
                     ? null
-                    : () => _runAction(widget.onPrint),
+                    : () {
+                        _runAction(widget.onPrint);
+                      },
               ),
             ),
           if (widget.onRemove != null)
@@ -149,7 +151,9 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
                 loading: widget.removing,
                 onTap: widget.removing
                     ? null
-                    : () => _runAction(widget.onRemove),
+                    : () {
+                        _runAction(widget.onRemove);
+                      },
               ),
             ),
         ],
@@ -177,16 +181,8 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
                 width: _actionWidth,
                 child: _buildActions(interactive: false),
               ),
-              if (showInteractiveActions)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: _actionWidth,
-                  child: _buildActions(interactive: true),
-                ),
               GestureDetector(
-                behavior: HitTestBehavior.opaque,
+                behavior: HitTestBehavior.deferToChild,
                 onHorizontalDragStart: _onHorizontalDragStart,
                 onHorizontalDragUpdate: _onHorizontalDragUpdate,
                 onHorizontalDragEnd: _onHorizontalDragEnd,
@@ -210,6 +206,14 @@ class _OrderSwipeActionsState extends State<OrderSwipeActions>
                   ),
                 ),
               ),
+              if (showInteractiveActions)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: _actionWidth,
+                  child: _buildActions(interactive: true),
+                ),
             ],
           );
         },
