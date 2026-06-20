@@ -9,10 +9,12 @@ class OrderingHeader extends StatefulWidget {
     super.key,
     required this.onSearchChanged,
     this.initialQuery = '',
+    this.clearToken = 0,
   });
 
   final ValueChanged<String> onSearchChanged;
   final String initialQuery;
+  final int clearToken;
 
   @override
   State<OrderingHeader> createState() => _OrderingHeaderState();
@@ -30,8 +32,20 @@ class _OrderingHeaderState extends State<OrderingHeader> {
   @override
   void didUpdateWidget(OrderingHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.clearToken != oldWidget.clearToken) {
+      _controller.value = const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      setState(() {});
+      return;
+    }
     if (widget.initialQuery != _controller.text) {
-      _controller.text = widget.initialQuery;
+      _controller.value = TextEditingValue(
+        text: widget.initialQuery,
+        selection: TextSelection.collapsed(offset: widget.initialQuery.length),
+      );
+      setState(() {});
     }
   }
 
@@ -102,7 +116,10 @@ class _OrderingHeaderState extends State<OrderingHeader> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppStyles.radiusMd),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 1.5,
+                ),
               ),
             ),
           ),

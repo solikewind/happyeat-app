@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/config/api_env_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
-import '../../shared/widgets/api_env_switch.dart';
 import '../../shared/widgets/app_brand_avatar.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
@@ -16,49 +14,9 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
-  final _urlCtrl = TextEditingController();
-  bool? _healthOk;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _urlCtrl.text = ref.read(settingsProvider).apiBaseUrl;
-      _checkHealth();
-    });
-  }
-
-  @override
-  void dispose() {
-    _urlCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _checkHealth() async {
-    try {
-      final client = ref.read(apiClientProvider);
-      final ok = await client.checkHealth();
-      if (mounted) setState(() => _healthOk = ok);
-    } catch (_) {
-      if (mounted) setState(() => _healthOk = false);
-    }
-  }
-
-  Future<void> _saveUrl() async {
-    await ref.read(settingsProvider.notifier).persistBaseUrl(_urlCtrl.text);
-    ref.invalidate(apiClientProvider);
-    await _checkHealth();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('服务器地址已保存')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
-    final settings = ref.watch(settingsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -139,70 +97,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   onTap: () => context.push('/menu-manage'),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    '服务器设置',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  ApiEnvSwitch(
-                    urlController: _urlCtrl,
-                    onUrlSynced: () {
-                      ref.invalidate(apiClientProvider);
-                      _checkHealth();
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _urlCtrl,
-                    decoration: InputDecoration(
-                      hintText: ApiEnvConfig.productionBaseUrl,
-                      suffixIcon: _healthOk == null
-                          ? null
-                          : Icon(
-                              _healthOk! ? Icons.check_circle : Icons.error,
-                              color: _healthOk!
-                                  ? AppColors.success
-                                  : AppColors.error,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (settings.env != ApiEnvironment.production)
-                    Text(
-                      '当前：${settings.apiBaseUrl}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  if (settings.env != ApiEnvironment.production)
-                    const SizedBox(height: 8)
-                  else
-                    const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        onPressed: _checkHealth,
-                        child: const Text('检测连接'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _saveUrl,
-                        child: const Text('保存'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 12),

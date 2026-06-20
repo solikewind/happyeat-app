@@ -52,7 +52,9 @@ class OrderingPage extends ConsumerStatefulWidget {
 }
 
 class _OrderingPageState extends ConsumerState<OrderingPage> {
-  static const double _snackBarBottomOffset = 104;
+  static const double _snackBarHorizontalMargin = 16;
+  static const double _snackBarMaxWidth = 280;
+  static const double _snackBarTopRatio = 0.36;
   static const double _sectionSyncThreshold = 132;
   static const double _listPaddingTop = 8;
   static const double _sectionHeaderHeight = 36;
@@ -65,7 +67,9 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   List<MenuCategory> _categories = [];
   List<MenuItem> _allMenus = [];
   String _activeCategory = 'all';
+  String _searchInput = '';
   String _search = '';
+  int _searchClearToken = 0;
   bool _loading = false;
   String? _error;
   int _overlayCount = 0;
@@ -112,19 +116,32 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     String message, {
     Duration duration = const Duration(seconds: 2),
   }) {
-    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final media = MediaQuery.of(context);
+    final top = media.padding.top + media.size.height * _snackBarTopRatio;
+    final horizontalMargin = ((media.size.width - _snackBarMaxWidth) / 2).clamp(
+      _snackBarHorizontalMargin,
+      media.size.width / 2,
+    );
+    final bottomMargin = (media.size.height - top).clamp(
+      0.0,
+      media.size.height,
+    );
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message),
+          backgroundColor: Colors.black.withValues(alpha: 0.72),
+          content: Text(message, textAlign: TextAlign.center),
           duration: duration,
           behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
           margin: EdgeInsets.fromLTRB(
-            16,
+            horizontalMargin,
             0,
-            16,
-            _snackBarBottomOffset + bottomPadding,
+            horizontalMargin,
+            bottomMargin,
           ),
         ),
       );
@@ -188,21 +205,21 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     List<MenuItem> list, {
     required bool groupByCategory,
   }) {
-    return List<MenuItem>.from(list)
-      ..sort((a, b) {
-        if (groupByCategory) {
-          final catCmp = (_categorySortById[a.categoryId] ?? (1 << 30))
-              .compareTo(_categorySortById[b.categoryId] ?? (1 << 30));
-          if (catCmp != 0) return catCmp;
-          final nameCmp = (_categoryNameById[a.categoryId] ?? '').compareTo(
-            _categoryNameById[b.categoryId] ?? '',
-          );
-          if (nameCmp != 0) return nameCmp;
-        }
-        final cmp = a.sort.compareTo(b.sort);
-        if (cmp != 0) return cmp;
-        return a.id.compareTo(b.id);
-      });
+    return List<MenuItem>.from(list)..sort((a, b) {
+      if (groupByCategory) {
+        final catCmp = (_categorySortById[a.categoryId] ?? (1 << 30)).compareTo(
+          _categorySortById[b.categoryId] ?? (1 << 30),
+        );
+        if (catCmp != 0) return catCmp;
+        final nameCmp = (_categoryNameById[a.categoryId] ?? '').compareTo(
+          _categoryNameById[b.categoryId] ?? '',
+        );
+        if (nameCmp != 0) return nameCmp;
+      }
+      final cmp = a.sort.compareTo(b.sort);
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
   }
 
   List<MenuItem> get _filteredMenus {
@@ -230,11 +247,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
       if (items == null || items.isEmpty) continue;
       used.add(cat.name);
       sections.add(
-        _MenuSection(
-          categoryKey: cat.name,
-          title: cat.name,
-          items: items,
-        ),
+        _MenuSection(categoryKey: cat.name, title: cat.name, items: items),
       );
     }
 
@@ -439,7 +452,9 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         ? null
         : specs.map((s) => '${s.specType}:${s.specValue}').join(' ');
 
-    ref.read(cartProvider.notifier).add(
+    ref
+        .read(cartProvider.notifier)
+        .add(
           CartItem(
             menuId: menu.id,
             name: menu.name,
@@ -453,6 +468,15 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
       '已添加 ${menu.name} ×$qty',
       duration: const Duration(seconds: 1),
     );
+    _clearSearchAfterMenuAdded();
+  }
+
+  void _clearSearchAfterMenuAdded() {
+    if (_searchInput.trim().isEmpty) return;
+    setState(() {
+      _searchInput = '';
+      _searchClearToken++;
+    });
   }
 
   void _openCartSheet() {
@@ -525,31 +549,28 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final entry = entries[index];
-                if (entry.isHeader) {
-                  final section = entry.section!;
-                  return MenuSectionHeader(
-                    key: _sectionHeaderKeys[section.categoryKey],
-                    title: section.title,
-                    count: section.items.length,
-                  );
-                }
-                final menu = entry.menu!;
-                final isLastInSection = index + 1 >= entries.length ||
-                    entries[index + 1].isHeader;
-                return Padding(
-                  padding: EdgeInsets.only(bottom: isLastInSection ? 4 : 10),
-                  child: MenuListTile(
-                    key: ValueKey(menu.id),
-                    menu: menu,
-                    onAdd: () => _openSpecPicker(menu),
-                  ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final entry = entries[index];
+              if (entry.isHeader) {
+                final section = entry.section!;
+                return MenuSectionHeader(
+                  key: _sectionHeaderKeys[section.categoryKey],
+                  title: section.title,
+                  count: section.items.length,
                 );
-              },
-              childCount: entries.length,
-            ),
+              }
+              final menu = entry.menu!;
+              final isLastInSection =
+                  index + 1 >= entries.length || entries[index + 1].isHeader;
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLastInSection ? 4 : 10),
+                child: MenuListTile(
+                  key: ValueKey(menu.id),
+                  menu: menu,
+                  onAdd: () => _openSpecPicker(menu),
+                ),
+              );
+            }, childCount: entries.length),
           ),
         ),
       ],
@@ -573,10 +594,16 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
         body: Column(
           children: [
             OrderingHeader(
-              initialQuery: _search,
+              initialQuery: _searchInput,
+              clearToken: _searchClearToken,
               onSearchChanged: (v) {
-                setState(() => _search = v);
-                if (_menuScrollController.hasClients) {
+                final willSearch = v.trim().isNotEmpty;
+                setState(() {
+                  _searchInput = v;
+                  _search = v;
+                });
+
+                if (willSearch && _menuScrollController.hasClients) {
                   _menuScrollController.jumpTo(0);
                   _setActiveCategory('all');
                 }
@@ -607,10 +634,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
                 ],
               ),
             ),
-            _OrderingCartBar(
-              onTap: _openCartSheet,
-              onCheckout: _openCartSheet,
-            ),
+            _OrderingCartBar(onTap: _openCartSheet, onCheckout: _openCartSheet),
           ],
         ),
       ),
@@ -619,10 +643,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
 }
 
 class _OrderingCartBar extends ConsumerWidget {
-  const _OrderingCartBar({
-    required this.onTap,
-    required this.onCheckout,
-  });
+  const _OrderingCartBar({required this.onTap, required this.onCheckout});
 
   final VoidCallback onTap;
   final VoidCallback onCheckout;

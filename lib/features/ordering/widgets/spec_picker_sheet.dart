@@ -54,6 +54,17 @@ class _SpecPickerSheetState extends State<SpecPickerSheet> {
     setState(() => _selected[group] = spec);
   }
 
+  void _confirm({required bool keepOpen}) {
+    widget.onConfirm(_qty, _selected.values.toList());
+    if (!keepOpen) {
+      Navigator.pop(context);
+      return;
+    }
+    if (_qty != 1) {
+      setState(() => _qty = 1);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.sizeOf(context).height * 0.72;
@@ -148,15 +159,28 @@ class _SpecPickerSheetState extends State<SpecPickerSheet> {
             ],
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              widget.onConfirm(_qty, _selected.values.toList());
-              Navigator.pop(context);
-            },
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-            ),
-            child: Text('加入购物车 · ${Money.formatYuan(_unitPrice * _qty)}'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _confirm(keepOpen: true),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text('加入再点'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _confirm(keepOpen: false),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text('加入购物车'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
