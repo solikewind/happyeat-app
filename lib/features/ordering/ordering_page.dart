@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,6 +56,7 @@ class OrderingPage extends ConsumerStatefulWidget {
 class _OrderingPageState extends ConsumerState<OrderingPage> {
   static const double _snackBarHorizontalMargin = 16;
   static const double _snackBarMaxWidth = 280;
+  static const double _snackBarMinVisibleBottomGap = 56;
   static const double _snackBarTopRatio = 0.36;
   static const double _sectionSyncThreshold = 132;
   static const double _listPaddingTop = 8;
@@ -74,6 +77,8 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
   String? _error;
   int _overlayCount = 0;
   bool _scrollFromRail = false;
+  OverlayEntry? _snackOverlay;
+  Timer? _snackOverlayTimer;
 
   final _menuScrollController = ScrollController();
   final Map<String, GlobalKey> _sectionHeaderKeys = {};
@@ -89,6 +94,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
 
   @override
   void dispose() {
+    _dismissSnackOverlay();
     _menuScrollController.removeListener(_handleMenuScroll);
     _menuScrollController.dispose();
     super.dispose();
@@ -117,35 +123,61 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     String message, {
     Duration duration = const Duration(seconds: 2),
   }) {
-    final media = MediaQuery.of(context);
-    final keyboardVisible = media.viewInsets.bottom > 0;
-    final targetTop = media.padding.top + media.size.height * _snackBarTopRatio;
-    final horizontalMargin = ((media.size.width - _snackBarMaxWidth) / 2).clamp(
-      _snackBarHorizontalMargin,
-      media.size.width / 2,
+    _dismissSnackOverlay();
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+
+    final entry = OverlayEntry(
+      builder: (context) {
+        final media = MediaQuery.of(context);
+        final visibleHeight = media.size.height - media.viewInsets.bottom;
+        final minTop = media.padding.top + 12;
+        final maxTop = (visibleHeight - _snackBarMinVisibleBottomGap)
+            .clamp(minTop, media.size.height)
+            .toDouble();
+        final top = (media.padding.top + visibleHeight * _snackBarTopRatio)
+            .clamp(minTop, maxTop)
+            .toDouble();
+
+        return Positioned(
+          top: top,
+          left: _snackBarHorizontalMargin,
+          right: _snackBarHorizontalMargin,
+          child: IgnorePointer(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _snackBarMaxWidth),
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
-    final bottomMargin = keyboardVisible
-        ? 12.0
-        : (media.size.height - targetTop).clamp(0.0, media.size.height);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.black.withValues(alpha: 0.72),
-          content: Text(message, textAlign: TextAlign.center),
-          duration: duration,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
-          margin: EdgeInsets.fromLTRB(
-            horizontalMargin,
-            0,
-            horizontalMargin,
-            bottomMargin,
-          ),
-        ),
-      );
+    _snackOverlay = entry;
+    overlay.insert(entry);
+    _snackOverlayTimer = Timer(duration, _dismissSnackOverlay);
+  }
+
+  void _dismissSnackOverlay() {
+    _snackOverlayTimer?.cancel();
+    _snackOverlayTimer = null;
+    _snackOverlay?.remove();
+    _snackOverlay = null;
   }
 
   void _maybePromptTable() {
