@@ -77,6 +77,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
 
   final _menuScrollController = ScrollController();
   final Map<String, GlobalKey> _sectionHeaderKeys = {};
+  final Map<String, GlobalKey> _menuItemKeys = {};
 
   @override
   void initState() {
@@ -117,15 +118,15 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     Duration duration = const Duration(seconds: 2),
   }) {
     final media = MediaQuery.of(context);
-    final top = media.padding.top + media.size.height * _snackBarTopRatio;
+    final keyboardVisible = media.viewInsets.bottom > 0;
+    final targetTop = media.padding.top + media.size.height * _snackBarTopRatio;
     final horizontalMargin = ((media.size.width - _snackBarMaxWidth) / 2).clamp(
       _snackBarHorizontalMargin,
       media.size.width / 2,
     );
-    final bottomMargin = (media.size.height - top).clamp(
-      0.0,
-      media.size.height,
-    );
+    final bottomMargin = keyboardVisible
+        ? 12.0
+        : (media.size.height - targetTop).clamp(0.0, media.size.height);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -283,6 +284,17 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     _sectionHeaderKeys.removeWhere((key, _) => !keys.contains(key));
   }
 
+  void _ensureMenuItemKeys(List<_MenuSection> sections) {
+    final keys = {
+      for (final section in sections)
+        for (final menu in section.items) menu.id,
+    };
+    for (final key in keys) {
+      _menuItemKeys.putIfAbsent(key, GlobalKey.new);
+    }
+    _menuItemKeys.removeWhere((key, _) => !keys.contains(key));
+  }
+
   void _handleMenuScroll() {
     if (_scrollFromRail || !_menuScrollController.hasClients) return;
     _syncActiveCategoryFromScroll();
@@ -354,6 +366,28 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     return null;
   }
 
+  double? _estimatedScrollOffsetForMenu(String menuId) {
+    final entries = _flatMenuEntries(_menuSections);
+    var offset = _listPaddingTop;
+
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
+      if (!entry.isHeader && entry.menu!.id == menuId) {
+        return offset;
+      }
+
+      offset += _estimatedEntryHeight(entry);
+      if (index + 1 < entries.length) {
+        if (!entry.isHeader && entries[index + 1].isHeader) {
+          offset += _sectionEndGap;
+        } else if (!entry.isHeader) {
+          offset += _menuItemGap;
+        }
+      }
+    }
+    return null;
+  }
+
   double? _measuredScrollOffsetForSection(String key) {
     final ctx = _sectionHeaderKeys[key]?.currentContext;
     if (ctx == null) return null;
@@ -365,16 +399,41 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     return viewport.getOffsetToReveal(renderObject, 0).offset;
   }
 
+  double? _measuredScrollOffsetForMenu(String menuId) {
+    final ctx = _menuItemKeys[menuId]?.currentContext;
+    if (ctx == null) return null;
+
+    final renderObject = ctx.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+
+    final viewport = RenderAbstractViewport.of(renderObject);
+    return viewport.getOffsetToReveal(renderObject, 0.14).offset;
+  }
+
   double _clampScrollOffset(double offset) {
     final position = _menuScrollController.position;
     return offset.clamp(0.0, position.maxScrollExtent);
   }
 
-  Future<void> _animateMenuScrollTo(double offset) {
+  Duration _scrollDurationFor(double targetOffset) {
+    if (!_menuScrollController.hasClients) {
+      return const Duration(milliseconds: 260);
+    }
+    final distance =
+        (_clampScrollOffset(targetOffset) - _menuScrollController.offset).abs();
+    final millis = (180 + distance * 0.18).clamp(220.0, 520.0).round();
+    return Duration(milliseconds: millis);
+  }
+
+  Future<void> _animateMenuScrollTo(
+    double offset, {
+    Duration? duration,
+    Curve curve = Curves.easeOutCubic,
+  }) {
     return _menuScrollController.animateTo(
       _clampScrollOffset(offset),
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
+      duration: duration ?? _scrollDurationFor(offset),
+      curve: curve,
     );
   }
 
@@ -409,6 +468,44 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     } finally {
       _scrollFromRail = false;
     }
+  }
+
+  Future<void> _scrollToMenu(String menuId) async {
+    if (!_menuScrollController.hasClients) return;
+    final targetOffset = _estimatedScrollOffsetForMenu(menuId);
+    if (targetOffset == null) return;
+
+    _scrollFromRail = true;
+    try {
+      await _animateMenuScrollTo(targetOffset);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+
+      final refinedOffset = _measuredScrollOffsetForMenu(menuId);
+      if (refinedOffset != null) {
+        final delta = (refinedOffset - _menuScrollController.offset).abs();
+        if (delta >= 12) {
+          await _animateMenuScrollTo(
+            refinedOffset,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+          );
+        }
+      } else {
+        final targetContext = _menuItemKeys[menuId]?.currentContext;
+        if (targetContext != null) {
+          await Scrollable.ensureVisible(
+            targetContext,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: 0.14,
+          );
+        }
+      }
+    } finally {
+      _scrollFromRail = false;
+    }
+    _syncActiveCategoryFromScroll();
   }
 
   Future<void> _onCategorySelected(String key) async {
@@ -464,18 +561,24 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
             image: menu.image,
           ),
         );
+    _clearSearchAfterMenuAdded(menu);
     _showSnackBar(
       '已添加 ${menu.name} ×$qty',
       duration: const Duration(seconds: 1),
     );
-    _clearSearchAfterMenuAdded();
   }
 
-  void _clearSearchAfterMenuAdded() {
-    if (_searchInput.trim().isEmpty) return;
+  void _clearSearchAfterMenuAdded(MenuItem menu) {
+    if (_searchInput.trim().isEmpty && _search.trim().isEmpty) return;
     setState(() {
       _searchInput = '';
+      _search = '';
       _searchClearToken++;
+      _activeCategory = 'all';
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_menuScrollController.hasClients) return;
+      await _scrollToMenu(menu.id);
     });
   }
 
@@ -507,6 +610,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
 
     final sections = _menuSections;
     _ensureSectionHeaderKeys(sections);
+    _ensureMenuItemKeys(sections);
 
     if (sections.isEmpty) {
       final q = _search.trim();
@@ -544,6 +648,7 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
     return CustomScrollView(
       key: const PageStorageKey<String>('menu-sectioned'),
       controller: _menuScrollController,
+      cacheExtent: 1200,
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverPadding(
@@ -563,9 +668,9 @@ class _OrderingPageState extends ConsumerState<OrderingPage> {
               final isLastInSection =
                   index + 1 >= entries.length || entries[index + 1].isHeader;
               return Padding(
+                key: _menuItemKeys[menu.id],
                 padding: EdgeInsets.only(bottom: isLastInSection ? 4 : 10),
                 child: MenuListTile(
-                  key: ValueKey(menu.id),
                   menu: menu,
                   onAdd: () => _openSpecPicker(menu),
                 ),
